@@ -1,11 +1,13 @@
-# R3 Catalog166 发布核查
+# R3 Catalog166 合并候选核查
+
+先读 [补丁接入记录](INTEGRATION.md)。本次全局排查以此分支固定提交为准，根目录包含筛选后的应用补丁，Writer 和现场包装以同一正式版本的公开核查副本为准。
 
 这份公开分支给 Dot 做一次独立核查。基线是当前已安装的 Catalog166 六项导入优化、随后修正的继续导入入口，以及配套的只读应用与备份恢复候选。请把发现绑定到本分支的具体提交和文件行。原开发任务继续以 `main` 的 `DOT-TASKS.md` 为准。
 
 ## 先读版本清单
 
 - [snapshot-index.json](snapshot-index.json) 列出应用、Writer 和发布检查源码的版本及文件摘要。仓库根目录是配套只读应用的源码和原有合成测试。Writer 的同字节文件复用根目录，版本不同的文件从 `writer-overlay/` 查阅。目录级相同模型与各自独立的来源摘要都在清单里。
-- [六项正式安装 SQL](../adapters/postgres/patches/direct-history-166-forward-inner.sql) 和 [逆向 SQL](../adapters/postgres/patches/direct-history-166-rollback-inner.sql) 为原候选字节。预期数据库目录是 166 个例程、116 个索引、155 个关系。应用的正式归档包含 544 个成员，其中 305 个原生运行成员。应用归档属于本机候选，应用实际上线以 T45 回执为准。
+- [六项正式安装 SQL](../adapters/postgres/patches/direct-history-166-forward-inner.sql) 和 [逆向 SQL](../adapters/postgres/patches/direct-history-166-rollback-inner.sql) 为原候选字节。预期数据库目录是 166 个例程、116 个索引、155 个关系。上一个配套应用归档包含 544 个成员，其中 305 个原生运行成员。这里的合并候选需要重新打包，现场实际上线以 T45 回执为准。
 - [继续导入入口](continuation/final33_host.py) 涵盖实际写入前的包身份检查。[只读部署候选](deployment/deploy-candidate.py) 和 [首次只读安装候选](deployment/deploy-first-install.py) 可以和 [恢复差分](recovery/catalog166-outer-catalog.patch) 一并审查。现场路径和身份绑定换为示例值。清单显示哪些文件字节与运行源码一致。原 Writer 的第 416 个输入叶为私有基线绑定，公开分支给出能够核查的 415 个源码叶。现场运行回执、授权文件和真实业务输入由本地负责人保管。
 
 在仓库根运行：

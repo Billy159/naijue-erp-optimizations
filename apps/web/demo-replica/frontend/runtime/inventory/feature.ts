@@ -54,7 +54,7 @@ export function createInventoryFeature(options:ReadyPageOptions,navigate:Navigat
         if(state.phase==='error'&&state.retry){const retry=host.ownerDocument.createElement('button');retry.type='button';retry.className='btn';retry.textContent='重试';retry.onclick=state.retry;toast.append(' ',retry);}
       }});
       let release:()=>void;
-      try{release=module.mountInventoryPage(host,{...options.inventory,scope,http,...(productContext?{productContext}:{}),onQueryApplied:snapshot=>{if(scope.active&&contextOwner.active)inventoryQuery=snapshotQueryParameters(snapshot);},onAccessFailure:session.onAccessFailure,onViewProduct:product=>{void activation.open(product);}});inventoryProductContext=null;}catch(error){activation.dispose();throw error;}
+      try{release=module.mountInventoryPage(host,{...options.inventory,scope,http,...(options.notify?{notify:options.notify}:{}),...(productContext?{productContext}:{}),onQueryApplied:snapshot=>{if(scope.active&&contextOwner.active)inventoryQuery=snapshotQueryParameters(snapshot);},onAccessFailure:session.onAccessFailure,onViewProduct:product=>{void activation.open(product);}});inventoryProductContext=null;}catch(error){activation.dispose();throw error;}
       return {dispose:()=>{activation.dispose();release();},canLeave:()=>true};
     }
     throw new Error('此页面尚未接入当前版本。');

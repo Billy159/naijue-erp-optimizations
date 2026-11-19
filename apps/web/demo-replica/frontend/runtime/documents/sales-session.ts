@@ -12,7 +12,7 @@ import type { HistoryTarget } from './history-reader.ts';
 import type { HistoryRevisionOwner } from './history-revision.ts';
 import type { NormalSalesRow } from './normal-list-reader.ts';
 import { documentRowKey } from './normal-list-reader.ts';
-import {OrdinaryListTotals} from './ordinary-list-totals.ts';
+import {OrdinaryListTotals, ordinaryFilterKey} from './ordinary-list-totals.ts';
 import type {SalesListQuery} from '../../../../src/sales/contracts.ts';
 import type { ReplicaSession } from '../common/session.ts';
 
@@ -40,7 +40,7 @@ export function createReplicaSalesSession(runtime: ReplicaSession, options: {
   const totals=new OrdinaryListTotals({scope,execute:ordinaryReader.readSalesTotals});
   const listQuery=new LatestQuery<SalesListQuery,NormalSalesPage|OrdinarySalesPage>({scope,execute:read=>ordinary?ordinaryReader.readSales(read):normalReader.readSales(read)});
   let acceptedSequence=0,filterKey:string|null=null,needsListRefresh=false;
-  const stopList=listQuery.subscribe(()=>{if(!ordinary)return;const state=listQuery.getSnapshot();if(state.phase==='loading'){const next=JSON.stringify(state.request?.parameters.filter);if(filterKey!==null&&next!==filterKey)totals.invalidate();filterKey=next;}if(state.phase==='success'&&state.success&&state.success.sequence!==acceptedSequence&&'readRevision' in state.success.data){acceptedSequence=state.success.sequence;needsListRefresh=false;void totals.load(state.success.parameters.filter,state.success.data.readRevision);}});
+  const stopList=listQuery.subscribe(()=>{if(!ordinary)return;const state=listQuery.getSnapshot();if(state.phase==='loading'){const next=ordinaryFilterKey(state.request?.parameters.filter);if(filterKey!==null&&next!==filterKey)totals.invalidate();filterKey=next;}if(state.phase==='success'&&state.success&&state.success.sequence!==acceptedSequence&&'readRevision' in state.success.data){acceptedSequence=state.success.sequence;needsListRefresh=false;void totals.load(state.success.parameters.filter,state.success.data.readRevision);}});
   const list=Object.freeze({list:listQuery,dispose:()=>listQuery.dispose()});
   const proposal = new SalesProposalSession(scope, current, runtime.onAccessFailure);
   const editor = new SalesEditorSession({

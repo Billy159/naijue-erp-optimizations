@@ -148,7 +148,7 @@ export function checkedInventorySnapshot(value: unknown, query: InventoryQuery, 
   return Object.freeze({ readReference, readiness, data });
 }
 export async function* checkedInventoryOutputFrames(values: AsyncIterable<unknown>, query: InventoryQuery, scope: InventoryReadScope): AsyncIterable<InventoryOutputFrame> {
-  let summary: InventoryOutputSummary | undefined, completion: Extract<InventoryOutputFrame, { kind: "complete" }> | undefined, completed = false, count = 0, sum = 0n, unknown = 0, previous: InventoryQueryProduct | undefined;
+  let summary: InventoryOutputSummary | undefined, completion: Extract<InventoryOutputFrame, { kind: "complete" }> | undefined, completed = false, count = 0, sum = 0n, unknown = 0, previous: { code: Buffer; id: string } | undefined;
   const ids = new Set<string>(), budget: MatrixBudget = { units: 0, skuCoordinates: new Map() };
   for await (const value of values) {
     if (completed) reject();
@@ -166,8 +166,9 @@ export async function* checkedInventoryOutputFrames(values: AsyncIterable<unknow
       const row = record(value, ["kind", "product"], [], reject); if (count % 100 === 0) budget.units = 0;
       const current = product(row.product, scope, query, budget);
       if (ids.has(current.id) || ++count > summary.exactTotalProducts) reject(); ids.add(current.id);
-      if (previous) { const order = Buffer.compare(Buffer.from(previous.code), Buffer.from(current.code)); if (order > 0 || order === 0 && previous.id >= current.id) reject(); }
-      previous = current; sum += BigInt(current.total.knownQuantity); unknown += current.total.unknownCells; if (!Number.isSafeInteger(unknown)) reject(); yield Object.freeze({ kind: "product", product: current }); continue;
+      const orderKey = Buffer.from(current.code);
+      if (previous) { const order = Buffer.compare(previous.code, orderKey); if (order > 0 || order === 0 && previous.id >= current.id) reject(); }
+      previous = { code: orderKey, id: current.id }; sum += BigInt(current.total.knownQuantity); unknown += current.total.unknownCells; if (!Number.isSafeInteger(unknown)) reject(); yield Object.freeze({ kind: "product", product: current }); continue;
     }
     const row = record(value, ["kind", "readReference", "exactTotalProducts", "emittedProducts", "allMatchesTotal"], [], reject);
     if (kind !== "complete" || row.readReference !== summary.readReference || row.exactTotalProducts !== summary.exactTotalProducts

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import { mkdir, writeFile, readFile, lstat, rm, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,43 +24,62 @@ export async function packRelease(options) {
   requireRelease(!within(buildRoot, out) && !within(out, buildRoot), 'OUTPUT_BUILD_OVERLAP_FORBIDDEN');
   const validated = await validateRelease({ sourceManifest, buildManifest, buildRoot });
   await mkdir(out, { recursive: false, mode: 0o700 });
-  const stage = path.join(out, '.packing'), verify = path.join(out, '.readback');
-  await mkdir(stage, { mode: 0o700 }); await mkdir(verify, { mode: 0o700 });
-  const memberRecords = [];
-  for (const [name, record] of validated.files) {
-    if (record.role === 'evidence') continue;
-    // Read again before copy; a changed shared build is rejected rather than packaging a mixed version.
-    const bytes = await boundedFile(buildRoot, name); matches(bytes, record);
-    const target = path.join(stage, record.member);
-    await mkdir(path.dirname(target), { recursive: true, mode: 0o755 });
-    await writeFile(target, bytes, { flag: 'wx', mode: 0o444 });
-    memberRecords.push({ path: record.member, bytes: bytes.length, sha256: sha256(bytes) });
+  const owned = await lstat(out);
+  try {
+    const stage = path.join(out, '.packing'), verify = path.join(out, '.readback');
+    await mkdir(stage, { mode: 0o700 }); await mkdir(verify, { mode: 0o700 });
+    const memberRecords = [];
+    for (const [name, record] of validated.files) {
+      if (record.role === 'evidence') continue;
+      // Read again before copy; a changed shared build is rejected rather than packaging a mixed version.
+      const bytes = await boundedFile(buildRoot, name); matches(bytes, record);
+      const target = path.join(stage, record.member);
+      await mkdir(path.dirname(target), { recursive: true, mode: 0o755 });
+      await writeFile(target, bytes, { flag: 'wx', mode: 0o444 });
+      memberRecords.push({ path: record.member, bytes: bytes.length, sha256: sha256(bytes) });
+    }
+    const manifestBytes = Buffer.from(JSON.stringify(validated.manifest, null, 2) + '\n');
+    const rechecked = await validateRelease({ sourceManifest, buildManifest, buildRoot });
+    requireRelease(JSON.stringify(rechecked.manifest) === JSON.stringify(validated.manifest), 'SOURCE_OR_BUILD_CHANGED_DURING_PACK');
+    await writeFile(path.join(stage, 'release-manifest.json'), manifestBytes, { flag: 'wx', mode: 0o444 });
+    memberRecords.push({ path: 'release-manifest.json', bytes: manifestBytes.length, sha256: sha256(manifestBytes) });
+    memberRecords.sort((a, b) => a.path.localeCompare(b.path));
+    const archive = path.join(out, 'release.tar.gz');
+    tar(['-czf', archive, '-C', stage, '.']);
+    await chmod(archive, 0o600);
+    // This is our freshly created archive, extracted exactly once into a fresh private directory.
+    tar(['-xzf', archive, '-C', verify]);
+    const actual = await walkFiles(verify);
+    requireRelease(actual.length === memberRecords.length && memberRecords.every(row => actual.includes(row.path)), 'ARCHIVE_MEMBER_SET_MISMATCH');
+    for (const record of memberRecords) matches(await readFile(path.join(verify, record.path)), record);
+    await writeFile(path.join(out, 'release-manifest.json'), manifestBytes, { flag: 'wx', mode: 0o600 });
+    await writeFile(path.join(out, 'members.sha256'), memberRecords.map(row => `${row.sha256}  ${row.path}`).join('\n') + '\n', { flag: 'wx', mode: 0o600 });
+    const hash = createHash('sha256');
+    let archiveBytes = 0;
+    for await (const chunk of createReadStream(archive, { highWaterMark: 64 * 1024 })) {
+      archiveBytes += chunk.length;
+      hash.update(chunk);
+    }
+    const receipt = { format: 'naijue-release-pack-receipt-v1', status: 'PACKED_AND_EXTRACTED_READBACK_MATCH',
+      buildId: validated.manifest.buildId, sourceCommit: validated.manifest.sourceCommit,
+      archive: { file: 'release.tar.gz', bytes: archiveBytes, sha256: hash.digest('hex') },
+      manifestSha256: sha256(manifestBytes), members: memberRecords.length, archiveExtractions: 1,
+      businessOrProductionValidation: false, deploymentExecuted: false };
+    await rm(stage, { recursive: true }); await rm(verify, { recursive: true });
+    await writeFile(path.join(out, 'pack-receipt.json'), JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+    return receipt;
+  } catch (error) {
+    // mkdir above is exclusive: never clean a pre-existing output or a
+    // directory now observed at this path with a different identity.
+    try {
+      const current = await lstat(out);
+      if (current.isDirectory() && current.dev === owned.dev && current.ino === owned.ino)
+        await rm(out, { recursive: true });
+    } catch (cleanupError) {
+      if (cleanupError.code !== 'ENOENT') throw new AggregateError([error, cleanupError], 'RELEASE_PACK_CLEANUP_FAILED');
+    }
+    throw error;
   }
-  const manifestBytes = Buffer.from(JSON.stringify(validated.manifest, null, 2) + '\n');
-  const rechecked = await validateRelease({ sourceManifest, buildManifest, buildRoot });
-  requireRelease(JSON.stringify(rechecked.manifest) === JSON.stringify(validated.manifest), 'SOURCE_OR_BUILD_CHANGED_DURING_PACK');
-  await writeFile(path.join(stage, 'release-manifest.json'), manifestBytes, { flag: 'wx', mode: 0o444 });
-  memberRecords.push({ path: 'release-manifest.json', bytes: manifestBytes.length, sha256: sha256(manifestBytes) });
-  memberRecords.sort((a, b) => a.path.localeCompare(b.path));
-  const archive = path.join(out, 'release.tar.gz');
-  tar(['-czf', archive, '-C', stage, '.']);
-  await chmod(archive, 0o600);
-  // This is our freshly created archive, extracted exactly once into a fresh private directory.
-  tar(['-xzf', archive, '-C', verify]);
-  const actual = await walkFiles(verify);
-  requireRelease(actual.length === memberRecords.length && memberRecords.every(row => actual.includes(row.path)), 'ARCHIVE_MEMBER_SET_MISMATCH');
-  for (const record of memberRecords) matches(await readFile(path.join(verify, record.path)), record);
-  await writeFile(path.join(out, 'release-manifest.json'), manifestBytes, { flag: 'wx', mode: 0o600 });
-  await writeFile(path.join(out, 'members.sha256'), memberRecords.map(row => `${row.sha256}  ${row.path}`).join('\n') + '\n', { flag: 'wx', mode: 0o600 });
-  const archiveBytes = await readFile(archive);
-  const receipt = { format: 'naijue-release-pack-receipt-v1', status: 'PACKED_AND_EXTRACTED_READBACK_MATCH',
-    buildId: validated.manifest.buildId, sourceCommit: validated.manifest.sourceCommit,
-    archive: { file: 'release.tar.gz', bytes: archiveBytes.length, sha256: sha256(archiveBytes) },
-    manifestSha256: sha256(manifestBytes), members: memberRecords.length, archiveExtractions: 1,
-    businessOrProductionValidation: false, deploymentExecuted: false };
-  await writeFile(path.join(out, 'pack-receipt.json'), JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-  await rm(stage, { recursive: true }); await rm(verify, { recursive: true });
-  return receipt;
 }
 
 export async function main(args) {

@@ -17,14 +17,14 @@ import { SourceControl } from '../common/ui/source-control.tsx';
 import { categoryCss,filterCss,productCss } from '../inventory/source-control-css.ts';
 import { ProductCandidatePreview } from './preview.tsx';
 export const filterLabels={product:'商品',category:'商品分类',year:'年份',season:'季节',supplier:'供应商',fit:'版型',thickness:'厚薄',shape:'领型 / 裤型'};
-interface Props {intentRevision?:number;kind:ProductManagementCandidateKind;value:readonly Selection[]|null;scope:ReadScope;reader:ProductManagementReader;productReader:ProductReadOnlyReader;change:(value:readonly Selection[]|null)=>void;denied:(e:HttpQueryError)=>void}
+interface Props {notify?:(message:string)=>void;intentRevision?:number;kind:ProductManagementCandidateKind;value:readonly Selection[]|null;scope:ReadScope;reader:ProductManagementReader;productReader:ProductReadOnlyReader;change:(value:readonly Selection[]|null)=>void;denied:(e:HttpQueryError)=>void}
 import { ALL_FILTER_VALUE as ALL,checkedFilterValues,resolveFilterSelection,assertSelectionBudget,pasteCodes,SelectionBudgetError } from '../inventory/filter-selection.ts';
 /** Original productFilterBridges consumers; server pages replace local directory arrays. */
 export function ProductFilter(p:Props){return <SourceControl css={p.kind==='product'?productCss:p.kind==='category'?categoryCss:filterCss}>{(portal,host)=><Control {...p} portal={portal} host={host}/>}</SourceControl>;}
 function Control(p:Props&{portal:HTMLElement;host:HTMLElement}){
  const [query]=useState(()=>new LatestQuery<ProductManagementCandidateQuery,ProductManagementCandidatePage>({scope:p.scope,execute:read=>p.reader.readCandidates(read)}));const state=useSyncExternalStore(query.subscribe,query.getSnapshot,query.getSnapshot);
  const [open,setOpen]=useState(false),[search,setSearch]=useState(''),[items,setItems]=useState<ProductManagementCandidatePage['items']>([]),[loaded,setLoaded]=useState<{search:string;page:number;total:number}|null>(null),[width,setWidth]=useState(300),[previewId,setPreview]=useState('');
- const alive=useRef(false),current=useRef(p);current.current=p;const searchRef=useRef(search);searchRef.current=search;const paste=useRef<AbortController|null>(null);const notify=(text:string)=>(window as Window&{toast?:(text:string)=>void}).toast?.(text);
+ const alive=useRef(false),current=useRef(p);current.current=p;const searchRef=useRef(search);searchRef.current=search;const paste=useRef<AbortController|null>(null);const notify=(text:string)=>{if(p.scope.active)p.notify?.(text);};
  const select=useRef<SelectHandle|null>(null),selectionRequest=useRef<AbortController|null>(null);
  const previewFrame=useRef<number|null>(null),previewIntent=useRef(0);
  const cancelPreview=()=>{previewIntent.current++;if(previewFrame.current!==null)cancelAnimationFrame(previewFrame.current);previewFrame.current=null;};

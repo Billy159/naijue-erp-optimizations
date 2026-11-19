@@ -142,3 +142,18 @@ test("W13 exact26 exclusion requires same-driver proof and failures/oversize abo
     assert.equal(failed.calls.filter(c => c.sql === "ROLLBACK").length, 1); assert.equal(failed.calls.filter(c => c.sql === "COMMIT").length, 0);
   }
 });
+
+test("category reorder audit filters keep persisted actions and the existing closed field projection", async () => {
+  for (const action of ["REORDER", "UNDO_REORDER"]) {
+    const p = setup();
+    const requested = parseSettingsAuditQuery({ ...query, module: "CATEGORY", action });
+    await new PostgresSettingsAuditUnitOfWork(p.driver).read(actor, requested, new AbortController().signal);
+    const page = p.calls.find(c => c.sql.includes("settings-audit:page"))!;
+    assert.equal(page.values[4], action);
+    assert.match(page.sql, /\$5::text IS NULL OR a.action=\$5/);
+    assert.match(page.sql, /'action',m.action/);
+    assert.match(page.sql, /'name','parent_id','display_order','deleted_at'/);
+    assert.doesNotMatch(page.sql, /category_order|undo_of_operation_id/);
+    assert.equal(p.calls.at(-1)!.sql, "COMMIT");
+  }
+});

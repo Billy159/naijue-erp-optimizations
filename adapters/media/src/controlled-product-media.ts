@@ -44,6 +44,15 @@ const fingerprint = (manifest: PrivateProductMediaManifest): string => createHas
   manifest.productId, manifest.imageId, manifest.fileRef,
   ...[manifest.original, manifest.thumbnail].map(b => b === null ? null : [b.rootKey, b.relativePath, b.mime, b.byteSize.toString(), b.sha256])
 ])).digest("hex");
+type BatchWaiter = {
+  readonly signal: AbortSignal;
+  readonly resolve: (bytes: Buffer) => void;
+  readonly reject: (error: unknown) => void;
+  readonly abort: () => void;
+};
+type PendingByteBatch = { readonly controller: AbortController; readonly waiters: Set<BatchWaiter> };
+const maxWaitersPerByteBatch = 8;
+
 /** Read-only controlled delivery. No upload, codec, migration, public fallback or file deletion.
  * Link resolution consults only the explicit private manifest index, never original bytes. */
 export class PrivateControlledProductMedia implements ControlledProductMediaProvider {
@@ -51,6 +60,7 @@ export class PrivateControlledProductMedia implements ControlledProductMediaProv
   private readonly basePath: string; private readonly roots: Readonly<Record<string, string>>; private readonly publicRoots: readonly string[];
   private readonly manifests: PrivateProductMediaManifestResolver; private readonly authorization: ProductQueryAuthorization;
   private readonly reader: CurrentProductImageSnapshotReader;
+  private readonly pendingByteBatches = new Map<string, PendingByteBatch>();
   constructor(options: PrivateControlledProductMediaOptions) {
     let origin: URL; try { origin = new URL(options.deliveryOrigin); } catch { throw TypeError("Explicit HTTPS media origin required"); }
     if (origin.protocol !== "https:" || origin.origin !== options.deliveryOrigin || origin.username || origin.password
@@ -85,8 +95,13 @@ export class PrivateControlledProductMedia implements ControlledProductMediaProv
   private async mapped(read: ProductMediaRead): Promise<ReadonlyMap<string, PrivateProductMediaManifest>> {
     this.checkedRead(read); const raw = await this.manifests.resolve(read); activeProductRead(read.signal);
     available(raw instanceof Map && raw.size <= read.images.length); const result = new Map<string, PrivateProductMediaManifest>();
+    // Index large manifest batches once. Single-item media deliveries keep the existing direct scan.
+    const imagesById = raw.size > 1 ? new Map<string, ProductMediaRead["images"][number]>() : null;
+    if (imagesById !== null) {
+      for (const image of read.images) if (!imagesById.has(image.id)) imagesById.set(image.id, image);
+    }
     for (const [id, input] of raw) {
-      const image = read.images.find(i => i.id === id);
+      const image = imagesById === null ? read.images.find(i => i.id === id) : imagesById.get(id);
       available(image && input && input.imageId === id && input.productId === image.productId && input.fileRef === image.fileRef);
       const original = this.checkedBlob(input.original); available(original.mime === image.mime && original.byteSize === image.byteSize);
       let thumbnail: PrivateProductMediaManifest["thumbnail"] = null;
@@ -137,6 +152,51 @@ export class PrivateControlledProductMedia implements ControlledProductMediaProv
       activeProductRead(signal); return result.subarray(0, length);
     } finally { await handle.close(); }
   }
+  private async flushByteBatch(key: string, batch: PendingByteBatch, blob: PrivateProductMediaBlob): Promise<void> {
+    // Seal before ANY filesystem path/descriptor verification. Later arrivals must start a new read.
+    this.pendingByteBatches.delete(key);
+    if (batch.waiters.size === 0) return;
+    try {
+      const bytes = await this.bytes(blob, batch.controller.signal);
+      for (const waiter of batch.waiters) {
+        // Keep the current waiter registered until its copy succeeds so the catch path can reject it.
+        const result = batch.waiters.size === 1 ? bytes : Buffer.from(bytes);
+        batch.waiters.delete(waiter);
+        waiter.signal.removeEventListener("abort", waiter.abort);
+        waiter.resolve(result);
+      }
+    } catch (error) {
+      for (const waiter of batch.waiters) {
+        waiter.signal.removeEventListener("abort", waiter.abort);
+        waiter.reject(error);
+      }
+      batch.waiters.clear();
+    }
+  }
+  private batchedBytes(key: string, blob: PrivateProductMediaBlob, signal: AbortSignal): Promise<Buffer> {
+    activeProductRead(signal);
+    let batch = this.pendingByteBatches.get(key);
+    if (batch?.waiters.size === maxWaitersPerByteBatch) return this.bytes(blob, signal);
+    if (!batch) {
+      const next: PendingByteBatch = { controller: new AbortController(), waiters: new Set() };
+      this.pendingByteBatches.set(key, next);
+      setImmediate(() => { void this.flushByteBatch(key, next, blob); });
+      batch = next;
+    }
+    const current = batch;
+    return new Promise((resolve, reject) => {
+      const waiter: BatchWaiter = {
+        signal, resolve, reject, abort: () => {
+          current.waiters.delete(waiter);
+          // Before sealing a new valid waiter can still arrive; after sealing nobody can join.
+          if (current.waiters.size === 0 && this.pendingByteBatches.get(key) !== current) current.controller.abort();
+          try { activeProductRead(signal); } catch (error) { reject(error); }
+        },
+      };
+      current.waiters.add(waiter);
+      signal.addEventListener("abort", waiter.abort, { once: true });
+    });
+  }
   async deliver(input: ControlledProductMediaDelivery): Promise<ControlledProductMediaBytes> {
     const actor = checkedProductActor(input.actor), parameters = parseProductImageQuery({ productId: input.productId, imageId: input.imageId }); activeProductRead(input.signal);
     requireDomain(/^[a-f0-9]{64}$/.test(input.revision) && (input.variant === "thumbnail" || input.variant === "original"), "PRODUCT_IMAGE_NOT_FOUND", "Product image is unavailable");
@@ -146,7 +206,14 @@ export class PrivateControlledProductMedia implements ControlledProductMediaProv
     const mapped = await this.mapped({ actor, grant, productId: parameters.productId, images: [image], signal: input.signal }), manifest = mapped.get(image.id); available(manifest);
     requireDomain(fingerprint(manifest) === input.revision, "PRODUCT_IMAGE_NOT_FOUND", "Product image revision is unavailable");
     const blob = input.variant === "original" ? manifest.original : manifest.thumbnail; available(blob);
-    try { return { mime: blob.mime, bytes: await this.bytes(blob, input.signal) }; }
+    // Only requests that independently passed the current grant, membership and mapping checks can join.
+    const key = JSON.stringify([actor.accountId, actor.hallId, input.revision, input.variant, blob.rootKey,
+      blob.relativePath, blob.mime, blob.byteSize.toString(), blob.sha256]);
+    try {
+      const bytes = await this.batchedBytes(key, blob, input.signal);
+      activeProductRead(input.signal);
+      return { mime: blob.mime, bytes };
+    }
     catch (error) { if ((error as { code?: string }).code === "PRODUCT_READ_ABORTED") throw error; available(false); }
   }
 }

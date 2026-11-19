@@ -2,7 +2,7 @@ import type { ActorContext } from "./ports.ts";
 import { CATALOGUE_PRICE_KEYS } from "./catalogue-price-input.ts";
 export const SETTINGS_AUDIT_MODULES = ["PRODUCT", "CATEGORY", "COLOR", "FIT", "HALL", "WAREHOUSE", "STAFF", "ACCOUNT", "PAYMENT_METHOD", "PAYMENT_ACCOUNT", "CUSTOMER", "SUPPLIER"] as const;
 export type SettingsAuditModule = typeof SETTINGS_AUDIT_MODULES[number];
-export const SETTINGS_AUDIT_ACTIONS = ["CREATE", "EDIT", "DISABLE", "RESTORE", "DELETE", "LEAVE", "REINSTATE", "RESET_PASSWORD"] as const;
+export const SETTINGS_AUDIT_ACTIONS = ["CREATE", "EDIT", "DISABLE", "RESTORE", "DELETE", "LEAVE", "REINSTATE", "RESET_PASSWORD", "REORDER", "UNDO_REORDER"] as const;
 export type SettingsAuditAction = typeof SETTINGS_AUDIT_ACTIONS[number];
 export interface SettingsAuditQuery {
   readonly module: SettingsAuditModule | "ALL"; readonly objectId: string | null;

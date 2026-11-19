@@ -54,6 +54,7 @@ export function projectSettingsAuditItem(input: unknown): SettingsAuditItem {
   const fields = SETTINGS_AUDIT_FIELDS[module], before = r.before_values === null ? {} : object(r.before_values), after = object(r.after_values);
   for (const values of [before, after]) data(Object.keys(values).every(key => fields.some(f => f.key === key)));
   data(r.action === null || SETTINGS_AUDIT_ACTIONS.includes(r.action as never));
+  data(module === "CATEGORY" || (r.action !== "REORDER" && r.action !== "UNDO_REORDER"));
   const credentialActions = r.credential_actions; data(Array.isArray(credentialActions) && credentialActions.length <= 1000 && credentialActions.every(a => a === "CREATE" || a === "RESET_PASSWORD"));
   data(module === "STAFF" || module === "ACCOUNT" || credentialActions.length === 0);
   return { id: id(r.id), operationId: id(r.operation_id), occurredAt: timestamp(r.occurred_at), module,

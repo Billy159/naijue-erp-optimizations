@@ -10,7 +10,7 @@ import type { PgSalesClient, PgSalesResult } from "../adapters/postgres/src/sale
 import { createSalesService } from "../packages/application/src/sales-service.ts";
 import type { SalesDependencies, SalesTransaction } from "../packages/application/src/ports.ts";
 import type { SalesDraft } from "../packages/domain/src/documents.ts";
-import { minorAmount, quantity, version } from "../packages/domain/src/values.ts";
+import { businessDate, minorAmount, quantity, version } from "../packages/domain/src/values.ts";
 import { actor, ids, sid, snapshot, syntheticDraft, syntheticSalesIdentity, SYNTHETIC_RULES } from "./support/synthetic-fixtures.ts";
 import { SyntheticStore } from "./support/synthetic-store.ts";
 const product = sid("product", 12), color = sid("color", 13), fit = sid("fit", 11), size = sid("size", 14), group = sid("sizeGroup", 30), method = sid("paymentMethod", 31);
@@ -160,6 +160,8 @@ test("native sales UoW: missing verifier fails native capability on original bou
   const uow = new PostgresSalesUnitOfWork({ async connect() { connections++; return client; } });
   await uow.transaction(async tx => { escaped = tx; await assert.rejects(() => tx.getCurrentSalesReferenceFacts!(liveDraft()), { code: "TRANSACTION_SCOPE" });
     await tx.getReceipt(actor.accountId, "SYNTHETIC-bound"); await tx.getSales(ids.sales);
+    const missing = liveDraft();
+    await assert.rejects(() => tx.getCurrentSalesReferenceFacts!({ ...missing, header: { ...missing.header, hallId: null } }, "RETAIN_HISTORICAL_UNKNOWN_HALL_SAVE"), { code: "TRANSACTION_SCOPE" });
     await assert.rejects(() => tx.getCurrentSalesReferenceFacts!(liveDraft()), { code: "NATIVE_CATALOGUE_FACTS_UNAVAILABLE" }); });
   assert.equal(connections, 1); assert.equal(released, 1); assert.equal(calls.filter(sql => /BEGIN/.test(sql)).length, 1); assert.equal(calls.filter(sql => sql === "COMMIT").length, 1);
   await assert.rejects(() => escaped!.getCurrentSalesReferenceFacts!(liveDraft()), { code: "TRANSACTION_SCOPE" }); assert.ok(!calls.some(sql => sql.includes("native-sales-facts:")));
@@ -339,4 +341,77 @@ test('historical current hall/warehouse may change under normal same-hall rules 
  assert.equal(previous.header.hallId,null);
  const wrong={...nativeFacts(changed),warehouse:{id:ids.warehouse,hallId:sid('hall',99),enabled:true}};
  await assert.rejects(async()=>rules.assertDraftChange(previous,changed,txFacts(wrong),'CUTOFF_HISTORY'),{code:'SALES_REFERENCE_UNAVAILABLE'});
+});
+
+test("historical NULL hall note and business date edits retain sealed provenance without a guessed hall", async () => {
+  const f = pgFixture();
+  const draft = { ...f.draft, header: { ...f.draft.header, hallId: null, note: "SYNTHETIC revised note", businessDate: businessDate("2026-10-21") } };
+  const previous = { ...draft, header: { ...draft.header, note: null, businessDate: f.draft.header.businessDate, responsibleStaffId: null, status: "DRAFT" as const,
+    version: version(3), createdByAccountId: null, createdHallId: null, createdAt: null, updatedAt: null, approvedByAccountId: null, approvedAt: null } };
+  const trace: string[] = [];
+  const tx: SalesTransaction = {
+    ...txFacts(nativeFacts()),
+    async getRetainedSalesApprovalHistory(id, expectedVersion, requireMigrationOrigin) {
+      assert.deepEqual([id, expectedVersion, requireMigrationOrigin], [ids.sales, version(3), true]);
+      trace.push("proof");
+      return { events: [], migrationOrigin: previous, assertCurrent() { trace.push("current"); } };
+    },
+    async getCurrentSalesReferenceFacts(input, scope?) {
+      trace.push("facts");
+      return f.reader.load(input, scope);
+    },
+  };
+  assert.notEqual(draft.header.businessDate, previous.header.businessDate);
+  await rules.assertDraftChange(previous, draft, tx, "CUTOFF_HISTORY");
+  assert.ok(trace.indexOf("proof") < trace.indexOf("facts"));
+  assert.equal(f.calls.filter(call => call.sql.includes("native-sales-facts:hall")).length, 0);
+  assert.equal(f.completeCalls(), 1);
+  await assert.rejects(() => f.reader.load(draft), { code: "INVALID_DATABASE_VALUE" });
+
+  const before = [...trace];
+  const changed = [
+    { ...draft, header: { ...draft.header, warehouseId: sid("warehouse", 999) } },
+    { ...draft, header: { ...draft.header, customerId: sid("customer", 999) } },
+    { ...draft, header: { ...draft.header, orderDiscount: minorAmount("1") } },
+    { ...draft, lines: [{ ...draft.lines[0]!, quantity: quantity((draft.lines[0]!.quantity + 1n).toString()) }] },
+    { ...draft, settlements: [{ ...draft.settlements[0]!, amount: minorAmount("1") }] },
+  ];
+  for (const input of changed) await assert.rejects(async () => rules.assertDraftChange(previous, input, tx, "CUTOFF_HISTORY"), { code: "SALES_REFERENCE_UNAVAILABLE" });
+  await assert.rejects(async () => rules.assertDraftChange(previous, draft, tx, "RUNTIME_LEDGER"), { code: "SALES_REFERENCE_UNAVAILABLE" });
+  await assert.rejects(async () => rules.assertDraftChange(undefined, draft, tx, "CUTOFF_HISTORY"), { code: "SALES_REFERENCE_UNAVAILABLE" });
+  assert.deepEqual(trace, before);
+  await assert.rejects(async () => rules.assertDraftChange(previous, draft, {
+    ...tx,
+    async getRetainedSalesApprovalHistory() { return { events: [], assertCurrent() {} }; },
+  }, "CUTOFF_HISTORY"), { code: "HISTORICAL_HALL_PROVENANCE_REQUIRED" });
+  assert.deepEqual(trace, before);
+});
+
+test("historical NULL hall SAVE persists the approved date and note without stock or settlement changes", async () => {
+  const fixture = pgFixture();
+  const store = new SyntheticStore();
+  const date = businessDate("2026-10-21");
+  const original = { ...fixture.draft, header: { ...fixture.draft.header, hallId: null,
+    responsibleStaffId: null, status: "DRAFT" as const, version: version(1),
+    createdByAccountId: null, createdHallId: null, createdAt: null, updatedAt: null,
+    approvedByAccountId: null, approvedAt: null } };
+  store.seedCutoffHistory(original);
+  const service = createSalesService({
+    unitOfWork: { transaction<T>(work: (tx: SalesTransaction) => Promise<T>) {
+      return store.transaction(tx => work({ ...tx, getCurrentSalesReferenceFacts: (draft, scope) => fixture.reader.load(draft, scope) }));
+    } },
+    rules, authorization: { async assertAllowed() {} }, now: () => "2026-10-22T08:00:00Z",
+    newId: kind => sid(kind, 1249),
+  });
+  const draft = { ...fixture.draft, header: { ...fixture.draft.header,
+    hallId: null, businessDate: date, note: "SYNTHETIC-date-note" } };
+  await service.execute({ action: "SAVE", actor, draft, expectedVersion: original.header.version, requestKey: "SYNTHETIC-date-only-scope" });
+  const stored = await store.transaction(tx => tx.getSales(draft.header.id));
+  assert.equal(stored?.document.header.businessDate, date);
+  assert.equal(stored.document.header.note, draft.header.note);
+  assert.equal(stored.document.header.hallId, null);
+  assert.equal(stored.document.header.warehouseId, original.header.warehouseId);
+  assert.deepEqual(stored.document.lines, original.lines);
+  assert.deepEqual(stored.document.settlements, original.settlements);
+  assert.equal(store.snapshot().ledger.length, 0);
 });

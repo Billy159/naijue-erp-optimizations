@@ -5,7 +5,7 @@ import type { EntityId, EntityKind } from "../../../packages/domain/src/values.t
 import { entityId, version } from "../../../packages/domain/src/values.ts";
 import { requireDomain } from "../../../packages/domain/src/errors.ts";
 import { SALES_NATIVE_FACT_MAX_LINES, SALES_NATIVE_FACT_QUERY_BATCH_SIZE } from "../../../packages/application/src/sales-native-facts.ts";
-import type { NativeSalesReferenceFacts } from "../../../packages/application/src/sales-native-facts.ts";
+import type { NativeSalesReferenceFacts, NativeSalesReferenceMode } from "../../../packages/application/src/sales-native-facts.ts";
 import type { PgSalesResult } from "./sales-unit-of-work.ts";
 import { booleanValue, moneyFromSql, stringValue } from "./codec.ts";
 
@@ -37,7 +37,7 @@ function exactMap<K extends EntityKind>(kind: K, rows: readonly Record<string, u
 /** Pure input checks are shared by cache hits and the original database loader.
  * Only reference primitives form the key; money/quantity/snapshot labels are
  * deliberately left to the original pure rules on every invocation. */
-export function checkedNativeSalesFactInput(input: SalesDraft | SalesDocument): { readonly document: SalesDraft | SalesDocument; readonly referenceKey: string } {
+export function checkedNativeSalesFactInput(input: SalesDraft | SalesDocument, mode?: NativeSalesReferenceMode): { readonly document: SalesDraft | SalesDocument; readonly referenceKey: string } {
   const document = structuredClone(input), h = document.header;
   if ("version" in h) version(h.version);
   for (const line of document.lines) requireDomain(typeof line.isCurrent === "boolean", "INVALID_LINE", "Explicit current line flag required");
@@ -47,7 +47,8 @@ export function checkedNativeSalesFactInput(input: SalesDraft | SalesDocument): 
   // account/method references are deduplicated and locked in bounded batches.
   requireDomain(current.length > 0 && current.length <= SALES_NATIVE_FACT_MAX_LINES && document.settlements.length <= SALES_NATIVE_FACT_MAX_LINES,
     "NATIVE_SALES_FACTS_TOO_LARGE", "Native fact request exceeds the technical current-document bound");
-  id("sales", h.id); id("hall", h.hallId); id("warehouse", h.warehouseId); id("customer", h.customerId);
+  id("sales", h.id); if (h.hallId !== null || mode !== "RETAIN_HISTORICAL_UNKNOWN_HALL_SAVE") id("hall", h.hallId);
+  id("warehouse", h.warehouseId); id("customer", h.customerId);
   if (h.salespersonId !== null) id("staff", h.salespersonId);
   const lineIds = new Set<string>();
   for (const line of current) {
@@ -94,8 +95,8 @@ export class PostgresNativeSalesFacts {
     }
     return exactMap(kind, rows, wanted);
   }
-  async load(input: SalesDraft | SalesDocument): Promise<NativeSalesReferenceFacts> {
-    const { document } = checkedNativeSalesFactInput(input); const h = document.header; this.checkScope(h.id);
+  async load(input: SalesDraft | SalesDocument, mode?: NativeSalesReferenceMode): Promise<NativeSalesReferenceFacts> {
+    const { document } = checkedNativeSalesFactInput(input, mode); const h = document.header; this.checkScope(h.id);
     requireDomain(this.verifier, "NATIVE_CATALOGUE_FACTS_UNAVAILABLE", "A real validated product-input completeness verifier is required");
     const current = document.lines.filter(line => line.isCurrent);
     const schema = one((await this.query("/* native-sales-facts:schema */ SELECT EXISTS (SELECT 1 FROM naijue_erp.schema_migration WHERE version = 10) AS installed")).rows);

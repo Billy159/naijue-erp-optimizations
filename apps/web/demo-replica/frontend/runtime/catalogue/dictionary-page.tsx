@@ -70,7 +70,8 @@ function Dictionary({ options, tab, guard, pageSize, rememberSize }: { pageSize:
         let total: number | undefined, found = false;
         const seen = new Set<string>();
         for (let page = 1; current(); page++) {
-          const verify = { search: code, page, pageSize: 20 as const };
+          // Use the largest existing authorized page only for post-commit verification.
+          const verify = { search: code, page, pageSize: 100 as const };
           const target = await execute({ parameters: verify, signal, identity: options.scope.identity, routeInstanceId: options.scope.routeInstanceId, entityId: null });
           if (!current()) return false;
           // The original reader validates each page. Bind pages to one stable scan

@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {OrdinaryListTotals} from './ordinary-list-totals.ts';
+import {OrdinaryListTotals,ordinaryFilterKey} from './ordinary-list-totals.ts';
 import {ReadContext} from '../../../../src/loading/read-scope.ts';
 import {HttpQueryError} from '../../../../src/transport/http-query.ts';
 const rev='a'.repeat(64),rev2='b'.repeat(64);const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject};};
@@ -9,3 +9,10 @@ test('same filter/revision reuses totals independently of pages; changed revisio
 test('stale filter success and failure cannot overwrite current totals',async()=>{const a=deferred(),b=deferred();const {owner}=setup(read=>read.parameters.filter.id==='a'?a.promise:b.promise);const first=owner.load({id:'a'},rev),second=owner.load({id:'b'},rev);b.resolve(result());await second;a.reject(new HttpQueryError('unavailable','NOT_READY',503));await first;assert.equal(owner.getSnapshot().phase,'ready');assert.equal(owner.getSnapshot().filter.id,'b');});
 test('committed invalidation and disposed identity discard late successful summaries',async()=>{for(const mode of ['mutation','identity']){const wait=deferred();const {owner,context}=setup(()=>wait.promise);const p=owner.load({},rev);if(mode==='mutation')owner.invalidate();else context.clear();wait.resolve(result());await p;assert.equal(owner.getSnapshot().data,null);assert.equal(owner.getSnapshot().phase,mode==='mutation'?'unknown':'disposed');}});
 test('409 changed and 503 unavailable stay unknown rather than zero; explicit retry allowed',async()=>{for(const status of [409,503]){let fail=true;const {owner}=setup(async()=>{if(fail)throw new HttpQueryError(status===409?'conflict':'unavailable',status===409?'ORDINARY_READ_CHANGED':'NOT_READY',status);return result();});await owner.load({},rev);assert.equal(owner.getSnapshot().phase,status===409?'changed':'error');assert.equal(owner.getSnapshot().data,null);fail=false;await owner.load({},rev);assert.equal(owner.getSnapshot().phase,'ready');}});
+test('sessions use the same filter key as the totals owner for unordered selection and property order',()=>{
+ const original={status:['approved','draft'],warehouses:['a','b']};
+ const reordered={warehouses:['b','a'],status:['draft','approved']};
+ assert.notEqual(JSON.stringify(original),JSON.stringify(reordered));
+ assert.equal(ordinaryFilterKey(original),ordinaryFilterKey(reordered));
+ assert.notEqual(ordinaryFilterKey(original),ordinaryFilterKey({...reordered,warehouses:['a']}));
+});

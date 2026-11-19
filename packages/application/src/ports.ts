@@ -1,5 +1,5 @@
 import type { RetainedSalesApproval, SalesRetainedApprovalHistory } from './sales-retained-approval.ts';
-import type { NativeSalesReferenceFacts } from "./sales-native-facts.ts";
+import type { NativeSalesReferenceFacts, NativeSalesReferenceMode } from "./sales-native-facts.ts";
 import type { InventoryPostingTransaction } from "./inventory-posting.ts";
 import type { RuntimeDocumentNumberTransaction } from "./runtime-document-number.ts";
 import type { SalesDocument, SalesDraft, SalesLineRow, DocumentStatus } from "../../domain/src/documents.ts";
@@ -60,7 +60,7 @@ export interface SalesTransaction extends InventoryPostingTransaction, RuntimeDo
   /** Optional capability for compatibility with explicit non-native providers.
    * Native rules require it and fail closed if absent. Reads use this original
    * bound command transaction and an explicit real catalogue completeness verifier. */
-  getCurrentSalesReferenceFacts?(document: SalesDraft | SalesDocument): Promise<NativeSalesReferenceFacts>;
+  getCurrentSalesReferenceFacts?(document: SalesDraft | SalesDocument, mode?: NativeSalesReferenceMode): Promise<NativeSalesReferenceFacts>;
   /** Manual creation only: exact enabled MAIN barcode and native labels, on the bound transaction. */
   getCurrentSalesSnapshots?(skuIds: readonly EntityId<"sku">[]): Promise<ReadonlyMap<EntityId<"sku">, SalesLineRow["snapshot"]>>;
   /** Immutable contiguous prior-unapproval evidence on this original locked command transaction. */

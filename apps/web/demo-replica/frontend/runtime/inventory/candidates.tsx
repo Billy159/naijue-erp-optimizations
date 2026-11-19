@@ -27,7 +27,7 @@ function measureCandidateGeometry(host:HTMLElement):CandidateGeometry {
  return {left:rect.left,width:rect.width,viewport:window.innerWidth,filterRight:sameRow?warehouse.right:0};
 }
 export interface CandidateSelectProps {
- intentRevision?:number;kind:CandidateKind;value:readonly Selection[]|null;categoryIds:readonly string[];scope:ReadScope;reader:InventoryReader;
+ notify?:(message:string)=>void;intentRevision?:number;kind:CandidateKind;value:readonly Selection[]|null;categoryIds:readonly string[];scope:ReadScope;reader:InventoryReader;
  productReader:ProductReadOnlyReader;onChange:(items:readonly Selection[]|null)=>void;onAccessFailure:(error:HttpQueryError)=>void;
 }
 export function CandidateSelect(p:CandidateSelectProps){return <SourceControl css={p.kind==='product'?productCss:p.kind==='category'?categoryCss:filterCss}>{(portal,host)=><CandidateContent {...p} portal={portal} host={host}/>}</SourceControl>;}
@@ -43,7 +43,7 @@ function CandidateContent(p:CandidateSelectProps&{portal:HTMLElement;host:HTMLEl
  const signature=JSON.stringify([input.trim(),p.categoryIds]);
  const signatureRef=useRef(signature);signatureRef.current=signature;
  const historyKey='inventory-search:'+p.scope.identity.accountId;const [history,setHistory]=useState<string[]>(()=>{try{const rows=JSON.parse(localStorage.getItem(historyKey)??'[]');return Array.isArray(rows)?rows.filter((x):x is string=>typeof x==='string').slice(0,15):[];}catch{return [];}});const paste=useRef<AbortController|null>(null);
- const saveHistory=(rows:string[])=>{setHistory(rows);try{localStorage.setItem(historyKey,JSON.stringify(rows));}catch{}};const notify=(message:string)=>(window as Window&{toast?:(text:string)=>void}).toast?.(message);
+ const saveHistory=(rows:string[])=>{setHistory(rows);try{localStorage.setItem(historyKey,JSON.stringify(rows));}catch{}};const notify=(message:string)=>{if(p.scope.active)p.notify?.(message);};
  const selectRef=useRef<Pick<SelectHandle,'focus'|'activeOptionValue'>|null>(null),previewFrame=useRef<number|null>(null),selectionRequest=useRef<AbortController|null>(null);
  const [pool]=useState(()=>new BoundedReadPool());const pasteGeneration=useRef(0);
  const invalidatePaste=()=>{pasteGeneration.current++;paste.current?.abort();paste.current=null;};

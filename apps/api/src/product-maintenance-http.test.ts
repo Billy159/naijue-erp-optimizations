@@ -29,6 +29,27 @@ test("W15 richer images HTTP returns exact F2 metadata and distinguishes real em
     mode = next; const before = reads, r = await send(); assert.equal(r.statusCode, status); assert.doesNotMatch(r.body, /PRIVATE|"images"/); if (next === "denied") assert.equal(reads, before);
   }
 });
+test("media metadata POST disconnected during authentication never starts its read transaction", async t => {
+  let raw!: import("node:http").IncomingMessage, started!: () => void, allowAuth!: () => void, transactions = 0;
+  const entered = new Promise<void>(done => { started = done; });
+  const gate = new Promise<void>(done => { allowAuth = done; });
+  const app = Fastify({ logger: false }); t.after(() => app.close());
+  app.addHook("onRequest", async request => { raw = request.raw; });
+  app.register(createProductMaintenanceHttpPlugin({ authenticate: async () => { started(); await gate; return actor; }, dependencies: {
+    now: () => "UNUSED", newId: () => "UNUSED", unitOfWork: { async transaction() {
+      transactions++; throw Error("Unexpected traversal to the database");
+    } },
+  } }));
+  const request = app.inject({ method: "POST", url: "/products/maintenance/images/query", payload: { productId: id(12001) } });
+  await entered;
+  Object.defineProperty(raw, "aborted", { value: true, configurable: true });
+  raw.emit("aborted");
+  allowAuth();
+  const response = await request;
+  assert.equal(response.statusCode, 408);
+  assert.equal(response.json().error.code, "PRODUCT_READ_ABORTED");
+  assert.equal(transactions, 0);
+});
 const values: ProductWriteValues = { productCode: "SYNTHETIC_01", name: "SYNTHETIC", categoryId: id(1), supplierId: id(2), seasonId: id(3), sizeGroupId: id(4),
   year: 2026, systemItemCode: "00001", thickness: null, collarPantsType: null, defaultBarcodeSchemeId: id(5), enabled: true,
   prices: Object.fromEntries(CATALOGUE_PRICE_KEYS.map(k => [k, k === "retail_price" ? "0.00" : null])) as ProductWriteValues["prices"] };

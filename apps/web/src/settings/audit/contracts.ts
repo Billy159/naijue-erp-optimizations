@@ -2,7 +2,7 @@ import type { QueryRead } from '../../loading/latest-query.ts';
 import type { ReadScope } from '../../loading/read-scope.ts';
 export const auditModules = ['PRODUCT', 'CATEGORY', 'COLOR', 'FIT', 'HALL', 'WAREHOUSE', 'STAFF', 'ACCOUNT', 'PAYMENT_METHOD', 'PAYMENT_ACCOUNT', 'CUSTOMER', 'SUPPLIER'] as const;
 export type SettingsAuditModule = typeof auditModules[number];
-export const auditActions = ['CREATE', 'EDIT', 'DISABLE', 'RESTORE', 'DELETE', 'LEAVE', 'REINSTATE', 'RESET_PASSWORD'] as const;
+export const auditActions = ['CREATE', 'EDIT', 'DISABLE', 'RESTORE', 'DELETE', 'LEAVE', 'REINSTATE', 'RESET_PASSWORD', 'REORDER', 'UNDO_REORDER'] as const;
 export type SettingsAuditAction = typeof auditActions[number];
 export interface SettingsAuditQuery {
   readonly module: 'ALL' | SettingsAuditModule; readonly objectId: string | null;
@@ -42,5 +42,5 @@ export interface SettingsAuditDrawerProps {
   readonly hasUnresolvedWrite?: () => boolean;
 }
 export const auditModuleLabels: Readonly<Record<SettingsAuditModule, string>> = Object.freeze({ PRODUCT: '商品', CATEGORY: '商品分类', COLOR: '颜色', FIT: '版型', HALL: '营业厅', WAREHOUSE: '仓库', STAFF: '员工', ACCOUNT: '登录账号', PAYMENT_METHOD: '收款方式', PAYMENT_ACCOUNT: '资金账户', CUSTOMER: '客户', SUPPLIER: '供货商' });
-export const auditActionLabels: Readonly<Record<SettingsAuditAction, string>> = Object.freeze({ CREATE: '新增', EDIT: '修改', DISABLE: '停用', RESTORE: '恢复使用', DELETE: '删除', LEAVE: '办理离职', REINSTATE: '恢复在职', RESET_PASSWORD: '重置密码' });
+export const auditActionLabels: Readonly<Record<SettingsAuditAction, string>> = Object.freeze({ CREATE: '新增', EDIT: '修改', DISABLE: '停用', RESTORE: '恢复使用', DELETE: '删除', LEAVE: '办理离职', REINSTATE: '恢复在职', RESET_PASSWORD: '重置密码', REORDER: '调整排序', UNDO_REORDER: '撤销排序' });
 export const blankAuditDraft: SettingsAuditDraft = Object.freeze({ module: 'ALL', objectId: null, objectSearch: '', actorSearch: '', action: 'ALL', dateFrom: null, dateTo: null });

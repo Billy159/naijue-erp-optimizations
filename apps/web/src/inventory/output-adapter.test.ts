@@ -253,6 +253,18 @@ test('replica stream keeps A/B/A global sections and exact full rows without rea
  assert.equal(await createInventoryPrintHtmlStream(streaming,read(),settings),createInventoryPrintHtml(expected,filter,settings));assert.equal(calls,2);
 });
 
+test('replica derives the visible workbook scope once, not for each parsed product', async () => {
+ const products=[product(1), product(2), product(3)];
+ const source=reader(async()=>response(frames(products)));
+ const input=read();let formatted=0;
+ const counted={...filter,suppliers:[{id:id(99), get label(){formatted++;return '合成供应商';}}]};
+ const settings={category:true,supplier:false,fit:true,sizeGroup:false,season:false,subtotal:true,total:true,sizeDescription:true};
+ const rows=[];for await(const row of inventoryWorkbookRowsStream(source,{...input,parameters:counted},settings))rows.push(row);
+ // The request is serialized once, then the same display label is formatted once for the final heading.
+ assert.equal(formatted,2);
+ assert.equal(rows.length,10);
+ assert.match(rows[1]![1]!,/供应商：合成供应商/);
+});
 test('replica incremental parser backpressures each product and closes an early consumer', async () => {
  const values=frames([product(1),product(2),product(3)]);let produced=0,cancelled=false;
  const source=reader(async()=>new Response(new ReadableStream({pull(controller){if(produced<values.length)controller.enqueue(encode([values[produced++]]));else controller.close();},cancel(){cancelled=true;}},{highWaterMark:0}),{headers:{'content-type':'application/x-ndjson'}}));

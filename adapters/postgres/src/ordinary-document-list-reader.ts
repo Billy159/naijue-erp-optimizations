@@ -197,9 +197,15 @@ function pageSql(kind: Kind, p: Predicate, parameters: Parameters): string {
     ? 'LEFT JOIN naijue_erp.hall hall ON hall.id=h.hall_id JOIN naijue_erp.warehouse wh ON wh.id=h.warehouse_id JOIN naijue_erp.customer c ON c.id=h.customer_id LEFT JOIN naijue_erp.staff sp ON sp.id=h.salesperson_id'
     : 'JOIN naijue_erp.warehouse fw ON fw.id=h.from_warehouse_id JOIN naijue_erp.warehouse tw ON tw.id=h.to_warehouse_id JOIN naijue_erp.hall fh ON fh.id=fw.hall_id JOIN naijue_erp.hall th ON th.id=tw.hall_id LEFT JOIN naijue_erp.staff approver ON approver.id=h.approved_by_staff_id';
   const from = kind === 'sales' ? salesFrom : transferFrom;
+  const headerTable = kind === 'sales' ? 'sales_header' : 'transfer_header';
   const limit = p.bind(parameters.pageSize), offset = p.bind(((BigInt(parameters.page) - 1n) * BigInt(parameters.pageSize)).toString());
-  return `/* ordinary-document:page:${kind} */ WITH page_headers AS MATERIALIZED (
-    SELECT h.* FROM ${from} WHERE ${p.where()} ORDER BY h.created_at DESC NULLS LAST,h.id ASC LIMIT ${limit} OFFSET ${offset}::bigint),
+  const authorizedPage = `FROM ${from} WHERE ${p.where()} ORDER BY h.created_at DESC NULLS LAST,h.id ASC LIMIT ${limit} OFFSET ${offset}::bigint`;
+  // Keep the first-page top-N plan; later pages sort keys rather than wide headers.
+  const pageHeaders = parameters.page === 1
+    ? `page_headers AS MATERIALIZED (SELECT h.* ${authorizedPage})`
+    : `page_keys AS MATERIALIZED (SELECT h.id,h.created_at ${authorizedPage}),
+       page_headers AS MATERIALIZED (SELECT h.* FROM page_keys k JOIN naijue_erp.${headerTable} h ON h.id=k.id)`;
+  return `/* ordinary-document:page:${kind} */ WITH ${pageHeaders},
     ${kind==='sales'?HISTORICAL_SALES_HALL_BATCH_CTES+',':''}
     page_lines AS MATERIALIZED (SELECT p.id AS document_id,p.stock_basis,l.id AS line_id,l.line_no,l.quantity::numeric AS quantity,${kind === 'sales' ? 'l.is_gift' : 'false'} AS is_gift,
       s.product_id,l.product_code_snapshot,l.product_name_snapshot,cc.id AS category_id,cc.name AS category_name
@@ -227,12 +233,26 @@ function pageSql(kind: Kind, p: Predicate, parameters: Parameters): string {
 }
 function totalsSql(kind: Kind, p: Predicate): string {
   const owner = kind === 'sales' ? 'sales_id' : 'transfer_id', table = kind === 'sales' ? 'sales_line' : 'transfer_line';
-  const values = ['quantity', 'incoming_quantity', 'outgoing_quantity'].map(column => `CASE WHEN count(*) FILTER(WHERE q.document_id IS NOT NULL AND q.${column} IS NULL)>0 THEN NULL ELSE coalesce(sum(CASE WHEN q.document_id IS NULL THEN 0 ELSE q.${column} END),0) END::text AS ${column}`).join(',');
-  const money = kind === 'sales' ? ',' + ['gross_amount', 'order_discount', 'net_due'].map(column => `coalesce(sum(h.${column}::numeric),0)::text AS ${column}`).join(',') : '';
-  return `/* ordinary-document:totals:${kind} */ WITH matched AS MATERIALIZED (SELECT h.* FROM ${kind === 'sales' ? salesFrom : transferFrom} WHERE ${p.where()}),
-    matched_lines AS (SELECT h.id AS document_id,l.quantity::numeric AS quantity,${kind === 'sales' ? 'l.is_gift' : 'false'} AS is_gift FROM matched h JOIN naijue_erp.${table} l ON l.${owner}=h.id AND l.is_current),
-    metrics AS (${quantityMetrics('matched_lines')})
-    SELECT count(*)::text AS exact_total,${values}${money} FROM matched h LEFT JOIN metrics q ON q.document_id=h.id`;
+  const sales = kind === 'sales';
+  const money = sales ? ',' + ['gross_amount', 'order_discount', 'net_due'].map(column => `coalesce(sum(h.${column}::numeric),0)::text AS ${column}`).join(',') : '';
+  const fields = sales ? 'h.id,h.gross_amount,h.order_discount,h.net_due' : 'h.id';
+  // Current native line quantities are NOT NULL. Empty or all-gift groups contribute
+  // zero, and any unknown gift classification propagates to all sales totals.
+  // Aggregate lines and headers separately to avoid per-document groups and
+  // without multiplying monetary totals by the number of current lines.
+  const metrics = sales
+    ? `coalesce(bool_or(l.is_gift IS NULL),false) AS unknown_gift,
+       coalesce(sum(l.quantity::numeric) FILTER(WHERE l.is_gift IS FALSE),0) AS quantity,
+       coalesce(sum(-(l.quantity::numeric)) FILTER(WHERE l.is_gift IS FALSE AND l.quantity<0),0) AS incoming_quantity,
+       coalesce(sum(l.quantity::numeric) FILTER(WHERE l.is_gift IS FALSE AND l.quantity>0),0) AS outgoing_quantity`
+    : 'coalesce(sum(l.quantity::numeric),0) AS quantity';
+  const values = sales
+    ? ['quantity','incoming_quantity','outgoing_quantity'].map(column => `CASE WHEN q.unknown_gift THEN NULL ELSE q.${column}::text END AS ${column}`).join(',')
+    : 'q.quantity::text AS quantity';
+  return `/* ordinary-document:totals:${kind} */ WITH matched AS MATERIALIZED (SELECT ${fields} FROM ${sales ? salesFrom : transferFrom} WHERE ${p.where()}),
+    header_totals AS (SELECT count(*)::text AS exact_total${money} FROM matched h),
+    line_totals AS (SELECT ${metrics} FROM matched h JOIN naijue_erp.${table} l ON l.${owner}=h.id AND l.is_current)
+    SELECT t.*,${values} FROM header_totals t CROSS JOIN line_totals q`;
 }
 /** New ordinary-only adapter. No Pool ownership, listener, schema issuer, mutation, persistent cache,
  * receipt scan, source reconciliation or cross-request transaction. Scripted tests are not PG engine proof. */

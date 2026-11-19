@@ -48,6 +48,7 @@ export function validateSettingsAuditPage(input: unknown, query: SettingsAuditQu
       || query.module !== 'ALL' && row.module !== query.module || !uuid(object.id) || query.objectId !== null && object.id !== query.objectId
       || !nullableText(object.name) || !nullableText(object.code) || actor.accountId !== null && !uuid(actor.accountId) || actor.staffId !== null && !uuid(actor.staffId)
       || !nullableText(actor.name) || !nullableText(actor.loginName) || row.action !== null && !auditActions.includes(row.action as typeof auditActions[number])
+      || row.module !== 'CATEGORY' && (row.action === 'REORDER' || row.action === 'UNDO_REORDER')
       || query.action !== 'ALL' && row.action !== query.action || !version(row.oldVersion) || !version(row.newVersion) || !Array.isArray(row.changes)
       || !Array.isArray(row.credentialActions) || row.credentialActions.length > 1000 || row.module !== 'STAFF' && row.module !== 'ACCOUNT' && row.credentialActions.length !== 0 || !row.credentialActions.every(action => action === 'CREATE' || action === 'RESET_PASSWORD')) throw new TypeError('Invalid audit item');
     const inputModule = row.module;

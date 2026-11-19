@@ -167,16 +167,23 @@ const colors = (product: InventoryProduct, settings: InventoryDisplaySettings) =
 const outputTotal = (t: StockTotal) => t.completeness === 'complete' ? t.knownQuantity : `已知 ${t.knownQuantity}（${t.unknownCells}格未知）`;
 const outputCell = (c: StockCell | InventoryDisplayCell) => c.state === 'known' ? c.quantity : c.state === 'not-applicable' ? '—' : 'knownQuantity' in c ? outputTotal({knownQuantity:c.knownQuantity,unknownCells:c.unknownCells,completeness:'incomplete'}) : '未知';
 
+function workbookSectionHeader(product: InventoryProduct, settings: InventoryDisplaySettings): readonly (readonly string[])[] {
+  return [[product.sizeGroup.label],
+    ['货号', '商品名称', ...(settings.fit ? ['版型'] : []), '颜色', '仓库', ...product.sizes.map(size => size.label)]];
+}
+function* workbookProductRows(product: InventoryProduct, settings: InventoryDisplaySettings): Generator<readonly string[]> {
+  for (const group of colors(product, settings)) for (const row of group.rows) {
+    yield [product.code, product.name, ...(settings.fit ? [group.fit?.label ?? ''] : []), group.color.label, row.warehouse.label,
+      ...product.sizes.map(size => outputCell(row.cells[size.id]!))];
+  }
+}
+
 /** Frozen inventory-matrix-experiment.js report(): native full-scope rows, not a DOM/page export. */
 function* workbookRows(data:InventoryOutputData,filter:InventoryFilter,settings:InventoryDisplaySettings):Generator<readonly string[]>{
   yield ['奈爵服饰 库存状况'];yield ['查询范围',inventoryOutputScope(filter,data)];
   for (const products of sections(data)) {
-    const first = products[0]!;
-    yield [first.sizeGroup.label];yield ['货号', '商品名称', ...(settings.fit ? ['版型'] : []), '颜色', '仓库', ...first.sizes.map(size => size.label)];
-    for (const product of products) for (const group of colors(product, settings)) for (const row of group.rows) {
-      yield [product.code, product.name, ...(settings.fit ? [group.fit?.label ?? ''] : []), group.color.label, row.warehouse.label,
-        ...product.sizes.map(size => { const cell = row.cells[size.id]!; return outputCell(cell); })];
-    }
+    yield* workbookSectionHeader(products[0]!, settings);
+    for (const product of products) yield* workbookProductRows(product, settings);
   }
 }
 export function inventoryWorkbookRows(data: InventoryOutputData, filter: InventoryFilter, settings: InventoryDisplaySettings): readonly (readonly string[])[] {return Array.from(workbookRows(data,filter,settings));}
@@ -198,8 +205,12 @@ export async function* inventoryWorkbookRowsStream(reader:InventoryOutputReader,
    if(chunk.kind==='summary'){const {kind:_,...data}=chunk;summary=data;continue;}
    if(chunk.kind==='complete'){complete=true;continue;}
    if(!summary)return invalid();
-   const product=chunk.product,key=JSON.stringify([product.sizeGroup.id,product.sizes.map(size=>[size.id,size.label])]);let group=groups.get(key);const first=!group;if(!group){group=[];groups.set(key,group);}
-   let index=0;for(const row of workbookRows({...summary,products:[product]},read.parameters,settings)){if(index++<2)continue;if(!first&&index<=4)continue;budget.reserveRow(row);group.push(JSON.stringify(row));await checkpoint();}
+   const product=chunk.product,key=JSON.stringify([product.sizeGroup.id,product.sizes.map(size=>[size.id,size.label])]);let group=groups.get(key);
+   if(!group){
+    group=[];groups.set(key,group);
+    for(const row of workbookSectionHeader(product,settings)){budget.reserveRow(row);group.push(JSON.stringify(row));await checkpoint();}
+   }
+   for(const row of workbookProductRows(product,settings)){budget.reserveRow(row);group.push(JSON.stringify(row));await checkpoint();}
   }
   if(!summary||!complete)return invalid();await checkpoint();
   const heading=['奈爵服饰 库存状况'],scopeRow=['查询范围',inventoryOutputScope(read.parameters,summary)];budget.reserveRow(heading);budget.reserveRow(scopeRow);yield heading;yield scopeRow;

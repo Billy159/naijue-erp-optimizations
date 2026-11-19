@@ -46,6 +46,8 @@ export function salesDocumentOutput(data: SalesDetailDto): DocumentOutput {
   }));
   sections.push({ title: '收退款明细', columns: ['原记录编号', '方向', '原付款方式编号', '原付款方式名称', '资金账户编号', '原资金账户名称', '金额'],
     rows: settlements.map(row => [row.id, row.direction === 'RECEIVE' ? '收款' : '退款', row.paymentMethodId, names.get(row.id)?.methodNameSnapshot ?? null, row.paymentAccountId, names.get(row.id)?.accountNameSnapshot ?? null, money(row.amount)]) });
+  // SALE has no direction-labelled sections, so each printed line must carry its sign.
+  const printSigned = (value: string | null | undefined) => h.businessType === 'SALE' ? value ?? null : value?.replace(/^-/,'') ?? null;
   const giftKnown = lines.every(row => row.isGift !== null);
   const incoming = lines.filter(row => row.isGift === false && BigInt(row.quantity) < 0n).reduce((sum, row) => sum - BigInt(row.quantity), 0n);
   const outgoing = lines.filter(row => row.isGift === false && BigInt(row.quantity) > 0n).reduce((sum, row) => sum + BigInt(row.quantity), 0n);
@@ -60,7 +62,7 @@ export function salesDocumentOutput(data: SalesDetailDto): DocumentOutput {
       : {title:section.title,columns:['款号／商品','颜色／版型／尺码','数量','单价','金额'],rows:section.rows.map(row=>[
         [row[2],row[3]].map(value=>value??'未记录').join(' / ')+(row[14]==='是'?'（赠品）':''),
         [row[4],row[5],row[6]].map(value=>value??'未记录').join(' / '),
-        row[7]?.replace(/^-/,'')??null,row[11]??null,row[12]?.replace(/^-/,'')??null])}),
+        printSigned(row[7]),row[11]??null,printSigned(row[12])])}),
     notes: ['商品与收退款名称为原保存记录；营业厅、客户、营业员和仓库名称为当前资料。', '金额单位：元；未记录的事实标为“未记录”。', ...(h.status === 'VOID' ? ['本单已作废，不计入有效销售。'] : [])],
   };
 }

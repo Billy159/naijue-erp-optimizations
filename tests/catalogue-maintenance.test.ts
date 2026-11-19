@@ -155,3 +155,48 @@ test('legacy FIT CREATE receipt replays before new numeric-only creation guard',
   f.receipts.set(command.requestKey,{requestHash:requestHash({actorAccountId:actor.accountId,kind:'FIT',command}),action:'CREATE',completedAt:'2026-10-22T08:00:00Z',result:existing});
   assert.deepEqual(await f.service.execute(actor,'FIT',command),existing);assert.equal(f.rows.size,0);assert.equal(f.audit.length,0);
 });
+
+// Regression uses actual service-produced stored completion, not a hand-written EDIT DTO.
+test("settings audit preserves stored category REORDER and UNDO_REORDER through safe DTO and browser validation", async () => {
+  const { projectSettingsAuditItem, parseSettingsAuditQuery } = await import("../packages/application/src/settings-audit-validation.ts");
+  const { createSettingsAuditService } = await import("../packages/application/src/settings-audit-service.ts");
+  const web = await import("../apps/web/src/settings/audit/http-reader.ts");
+  const { auditActionLabels } = await import("../apps/web/src/settings/audit/contracts.ts");
+  const f = orderFixture();
+  const saved = await f.service.execute(actor, "CATEGORY", f.command());
+  await f.service.execute(actor, "CATEGORY", { action: "UNDO_REORDER", requestKey: "audit-undo", originalOperationId: saved.operationId, expectedSiblings: f.expected() });
+  const raw = f.audits.map((c, index) => ({
+    id: id(5000 + index), operation_id: c.operationId, module: c.kind, object_id: c.targetId,
+    object_name: f.rows.get(c.targetId)!.name, object_code: null, actor_account_id: c.actorAccountId,
+    actor_staff_id: null, actor_name: null, actor_login_name: null, action: c.action,
+    old_version: c.oldVersion, new_version: c.newVersion, occurred_at: c.completedAt,
+    // Match the SQL's existing closed CATEGORY projection; never expose category_order internals.
+    before_values: { display_order: c.beforeValues!.display_order }, after_values: { display_order: c.afterValues.display_order }, credential_actions: []
+  }));
+  const base = { module: "ALL", objectId: null, objectSearch: "", actorSearch: "", action: "ALL", dateFrom: null, dateTo: null, page: 1, pageSize: 20 };
+  const service = createSettingsAuditService({ async read(_actor, query) {
+    const items = raw.filter(r => query.action === "ALL" || r.action === query.action);
+    return { role: "ADMIN", total: String(items.length), items };
+  } });
+  for (const action of ["ALL", "REORDER", "UNDO_REORDER"]) {
+    const query = parseSettingsAuditQuery({ ...base, action });
+    const result = await service.query(actor, query, new AbortController().signal);
+    const page = web.validateSettingsAuditPage(result, web.parseSettingsAuditQuery(query));
+    assert.deepEqual(page.items.map(item => item.action), action === "ALL" ? ["REORDER", "UNDO_REORDER"] : [action]);
+    for (const item of page.items) {
+      assert.equal(auditActionLabels[item.action!], item.action === "REORDER" ? "调整排序" : "撤销排序");
+      assert.deepEqual(item.changes.map(c => c.field), ["display_order"]);
+      assert.equal(item.changes[0]!.before.state, "VALUE");
+      assert.equal(item.changes[0]!.after.state, "VALUE");
+      assert.notDeepEqual(item.changes[0]!.before, item.changes[0]!.after);
+    }
+  }
+  for (const action of ["REORDER", "UNDO_REORDER"]) {
+    assert.throws(() => projectSettingsAuditItem({ ...raw[0], module: "PRODUCT", before_values: {}, after_values: {}, action }), { code: "INVALID_SETTINGS_AUDIT_DATA" });
+    const item = projectSettingsAuditItem({ ...raw[0], action });
+    assert.throws(() => web.validateSettingsAuditPage({ items: [{ ...item, module: "PRODUCT", changes: [] }], total: 1, page: 1, pageSize: 20 }, web.parseSettingsAuditQuery(base)));
+  }
+  assert.throws(() => projectSettingsAuditItem({ ...raw[0], action: "ARBITRARY_ACTION" }), { code: "INVALID_SETTINGS_AUDIT_DATA" });
+  assert.throws(() => parseSettingsAuditQuery({ ...base, action: "ARBITRARY_ACTION" }));
+  assert.throws(() => web.parseSettingsAuditQuery({ ...base, action: "ARBITRARY_ACTION" }));
+});

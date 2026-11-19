@@ -204,10 +204,19 @@ async function closeListener(server: Server | undefined, sockets: ReadonlySet<Du
   }));
   // Operation budget, then configured acquisition/disposal allowance; requestTimeout only bounds incoming bytes.
   let timer: NodeJS.Timeout | undefined;
-  const deadline = new Promise<never>((_resolve,reject) => { timer=setTimeout(()=>{
-    for(const socket of sockets) socket.destroy();
-    reject(new Error("Production request drain deadline exceeded; request outcomes may require original-key recovery"));
-  },drainMs); timer.unref(); });
+  const deadline = new Promise<never>((_resolve, reject) => {
+    // Node treats timer delays above its signed 32-bit limit as 1 ms.
+    const schedule = (remaining: number): void => {
+      const interval = Math.min(remaining, 2_147_483_647);
+      timer = setTimeout(() => {
+        if (remaining > interval) { schedule(remaining - interval); return; }
+        for (const socket of sockets) socket.destroy();
+        reject(new Error("Production request drain deadline exceeded; request outcomes may require original-key recovery"));
+      }, interval);
+      timer.unref();
+    };
+    schedule(drainMs);
+  });
   try { await Promise.race([stopped,deadline]); } finally { if(timer)clearTimeout(timer); }
 }
 /** Internal container HTTP only. C must keep port 3000 off public bindings and

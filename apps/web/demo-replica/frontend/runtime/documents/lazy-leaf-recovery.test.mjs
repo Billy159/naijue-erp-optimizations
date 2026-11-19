@@ -55,8 +55,18 @@ try{
  const entryScope=entryContext.createScope('entry');
  const entryRequests=[];globalThis.__b05EntryLoad=tag=>new Promise((resolve,reject)=>entryRequests.push({tag,resolve,reject}));
  const common={scope:entryScope,manualCreate:true,existingEdit:true,historyRevision:true,newRequestKey:()=>id(99),http:{origin:'https://test',basePath:'/api',fetch:()=>{throw Error('no HTTP');}},productReader:{},denied:e=>{throw e;},navigate:()=>{},reset:()=>{},view:{reload:false},references:{},principal:{role:'WAREHOUSE',accountId:id(99),hallId:null}};
+ // Bad external links must render a stable route error before loading a detail leaf.
+ for(const [mount,route,list] of [[mountTransfers,'transfer/view/%','transfer'],[mountTransfers,`transfer/history/${id(80)}/%/1`,'transfer'],[mountSales,'sales/view/%E0%A4%A','sales'],[mountSales,'sales/edit/%ZZ','sales'],[mountSales,`sales/history/%/${id(81)}/1`,'sales']]){
+  const reads=entryRequests.length;let navigated='',view;
+  const session={scope:entryScope,create:{cancelPreparation(){}},workspace:{suspend(){}},editor:{suspend(){}}};
+  await act(async()=>{view=mount(host,route,{...common,session,navigate:value=>{navigated=value;}});});
+  assert.match(host.querySelector('[role="alert"]')?.textContent??'',/地址无效/);
+  assert.equal(entryRequests.length,reads,'invalid link must not start a detail leaf');
+  await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='返回列表').click());
+  assert.equal(navigated,list);await act(async()=>view.dispose());
+ }
  // Actual route wrappers: loading, failure, retry and close stay inside the original guard owner.
- for(const [mount,route,leaf,list] of [[mountTransfers,'transfer/new','NewTransfer','transfer'],[mountTransfers,`transfer/history/${id(80)}/${id(81)}/1`,'SourceHistory','transfer'],[mountSales,`sales/history/${id(80)}/${id(81)}/1`,'ImportedHistory','sales']]){
+ for(const [mount,route,leaf,list] of [[mountTransfers,'transfer/new','NewTransfer','transfer'],[mountTransfers,`transfer/history/${id(80).replaceAll('-', '%2D')}/${id(81)}/1`,'SourceHistory','transfer'],[mountSales,`sales/history/${id(80)}/${id(81)}/1`,'ImportedHistory','sales']]){
   let canLeaveCalls=0,navigations=0;
   const proposal={getSnapshot:()=>({dirty:true,lineEdit:null,entries:{},pending:{product:null,query:''},replacement:null,matrixQuantities:{}})};
   const session={scope:entryScope,historyOwners:new Map(),proposal,create:{getSnapshot:()=>({preparing:false}),cancelPreparation(){}},workspace:{hasUnresolvedWrite:false,suspend(){},getSnapshot:()=>({write:{phase:'idle'}}),canLeave:()=>true,existingDocument:null},editor:{getSnapshot:()=>({command:{write:{phase:'idle'}}}),canLeave:()=>{canLeaveCalls++;return true;},suspend(){}}};

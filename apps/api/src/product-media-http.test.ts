@@ -31,6 +31,44 @@ test("W15 media HTTP null provider, denied/replaced/missing and internal failure
   }
 });
 
+test("media GET disconnected while authentication waits does not start the controlled read", async t => {
+  let raw!: import("node:http").IncomingMessage, started!: () => void, allowAuth!: () => void, reads = 0;
+  const entered = new Promise<void>(done => { started = done; });
+  const gate = new Promise<void>(done => { allowAuth = done; });
+  const app = Fastify({ logger: false }); t.after(() => app.close());
+  app.addHook("onRequest", async request => { raw = request.raw; });
+  app.register(createProductMediaHttpPlugin({ authenticate: async () => { started(); await gate; return actor; },
+    provider: { async deliver() { reads++; return { bytes: Buffer.from([1]), mime: "image/png" }; } } }));
+  const request = app.inject(url);
+  await entered;
+  Object.defineProperty(raw, "aborted", { value: true, configurable: true });
+  raw.emit("aborted");
+  allowAuth();
+  const response = await request;
+  assert.equal(response.statusCode, 408);
+  assert.equal(response.json().error.code, "PRODUCT_READ_ABORTED");
+  assert.equal(reads, 0);
+});
+
+test("media GET aborts in-flight provider and drops bytes returned after cancellation", async t => {
+  let raw!: import("node:http").IncomingMessage, signal!: AbortSignal, started!: () => void, release!: () => void;
+  const entered = new Promise<void>(done => { started = done; });
+  const gate = new Promise<void>(done => { release = done; });
+  const app = Fastify({ logger: false }); t.after(() => app.close());
+  app.addHook("onRequest", async request => { raw = request.raw; });
+  app.register(createProductMediaHttpPlugin({ authenticate: async () => actor, provider: { async deliver(input) {
+    signal = input.signal!; started(); await gate; return { bytes: Buffer.from([1]), mime: "image/png" };
+  } } }));
+  const request = app.inject(url);
+  await entered;
+  raw.emit("aborted");
+  assert.equal(signal.aborted, true);
+  release();
+  const response = await request;
+  assert.equal(response.statusCode, 408);
+  assert.equal(response.json().error.code, "PRODUCT_READ_ABORTED");
+});
+
 const uploadUrl = "/products/media/uploads";
 const uploadHeaders = { "content-type": "image/png", "x-command-key": "original-command", "x-upload-key": "original-file" };
 const uploaded = { uploadId: sid("product", 12003), mime: "image/png" as const, byteSize: "1", expiresAt: "2026-10-24T01:00:00.000Z" };

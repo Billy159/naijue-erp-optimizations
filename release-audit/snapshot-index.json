@@ -3,8 +3,9 @@
     {
       "path": "adapters/media/src/controlled-product-media.ts",
       "reviewFile": "adapters/media/src/controlled-product-media.ts",
-      "releaseSha256": "59e4a6174c9dd4821e6eb9da5c9dd731d1b10362ff6bdba309699733c3dd5525",
-      "reviewSha256": "59e4a6174c9dd4821e6eb9da5c9dd731d1b10362ff6bdba309699733c3dd5525"
+      "releaseSha256": "0f981e86f454c83108e1a55e047f67a5542a16d926bdf8d79c3450ba977cc5dd",
+      "reviewSha256": "0f981e86f454c83108e1a55e047f67a5542a16d926bdf8d79c3450ba977cc5dd",
+      "baseAppReleaseSha256": "59e4a6174c9dd4821e6eb9da5c9dd731d1b10362ff6bdba309699733c3dd5525"
     },
     {
       "path": "adapters/media/src/product-image-signature.ts",
@@ -807,8 +808,9 @@
     {
       "path": "adapters/postgres/src/inventory-query-reader.ts",
       "reviewFile": "adapters/postgres/src/inventory-query-reader.ts",
-      "releaseSha256": "da6756ae6e157d6b2df5cf8d5519c2d8e96f4576fb801637c779538a334644a4",
-      "reviewSha256": "da6756ae6e157d6b2df5cf8d5519c2d8e96f4576fb801637c779538a334644a4"
+      "releaseSha256": "a495d952a8ec2836ed2f0613ce7a34a1cf2fc525e237b05cc1af92df483b001e",
+      "reviewSha256": "a495d952a8ec2836ed2f0613ce7a34a1cf2fc525e237b05cc1af92df483b001e",
+      "baseAppReleaseSha256": "da6756ae6e157d6b2df5cf8d5519c2d8e96f4576fb801637c779538a334644a4"
     },
     {
       "path": "adapters/postgres/src/maintenance-command-unit-of-work.ts",
@@ -849,8 +851,9 @@
     {
       "path": "adapters/postgres/src/ordinary-document-list-reader.ts",
       "reviewFile": "adapters/postgres/src/ordinary-document-list-reader.ts",
-      "releaseSha256": "8f4ecdb99ef8581b1eee717c769097b85d2db77bec159f5253a34440853c11c1",
-      "reviewSha256": "8f4ecdb99ef8581b1eee717c769097b85d2db77bec159f5253a34440853c11c1"
+      "releaseSha256": "9962545a47e6eb67bdb430463d17db6e039e8cf576b76e1af323be9f391c0d1e",
+      "reviewSha256": "9962545a47e6eb67bdb430463d17db6e039e8cf576b76e1af323be9f391c0d1e",
+      "baseAppReleaseSha256": "8f4ecdb99ef8581b1eee717c769097b85d2db77bec159f5253a34440853c11c1"
     },
     {
       "path": "adapters/postgres/src/ordinary27-product-capacity.ts",
@@ -951,8 +954,9 @@
     {
       "path": "adapters/postgres/src/sales-native-facts.ts",
       "reviewFile": "adapters/postgres/src/sales-native-facts.ts",
-      "releaseSha256": "3dfbe94088058c611e234ee826134858cbf3d9a7a20404a35b8cb9e982d0a79a",
-      "reviewSha256": "3dfbe94088058c611e234ee826134858cbf3d9a7a20404a35b8cb9e982d0a79a"
+      "releaseSha256": "c94f1775b40e51f950ad8f5fd552ac30cd2b90dbfb0ab26ea676fdeab6b59aa8",
+      "reviewSha256": "c94f1775b40e51f950ad8f5fd552ac30cd2b90dbfb0ab26ea676fdeab6b59aa8",
+      "baseAppReleaseSha256": "3dfbe94088058c611e234ee826134858cbf3d9a7a20404a35b8cb9e982d0a79a"
     },
     {
       "path": "adapters/postgres/src/sales-query-reader.ts",
@@ -969,8 +973,9 @@
     {
       "path": "adapters/postgres/src/sales-unit-of-work.ts",
       "reviewFile": "adapters/postgres/src/sales-unit-of-work.ts",
-      "releaseSha256": "cf9d32c45f6bd1562a23e71bdea7fbcf30cd81d3481f212ce4fe9db31b721268",
-      "reviewSha256": "cf9d32c45f6bd1562a23e71bdea7fbcf30cd81d3481f212ce4fe9db31b721268"
+      "releaseSha256": "55b7fd0353c96e158c4517271fc4459a6d15c0debde1a3b3e2f401a6754ff513",
+      "reviewSha256": "55b7fd0353c96e158c4517271fc4459a6d15c0debde1a3b3e2f401a6754ff513",
+      "baseAppReleaseSha256": "cf9d32c45f6bd1562a23e71bdea7fbcf30cd81d3481f212ce4fe9db31b721268"
     },
     {
       "path": "adapters/postgres/src/settings-audit-reader.ts",
@@ -1179,8 +1184,9 @@
     {
       "path": "apps/api/src/product-maintenance-http.ts",
       "reviewFile": "apps/api/src/product-maintenance-http.ts",
-      "releaseSha256": "5e7ff476035459ddd9007d9f03201bfd4f663a3faac821984d2cb79c92104997",
-      "reviewSha256": "5e7ff476035459ddd9007d9f03201bfd4f663a3faac821984d2cb79c92104997"
+      "releaseSha256": "445694674854592aac3dd18b2e67940cf0aa321ac445aadba6dd204f8feb5ad6",
+      "reviewSha256": "445694674854592aac3dd18b2e67940cf0aa321ac445aadba6dd204f8feb5ad6",
+      "baseAppReleaseSha256": "5e7ff476035459ddd9007d9f03201bfd4f663a3faac821984d2cb79c92104997"
     },
     {
       "path": "apps/api/src/product-management-query-http.ts",
@@ -1191,8 +1197,9 @@
     {
       "path": "apps/api/src/product-media-http.ts",
       "reviewFile": "apps/api/src/product-media-http.ts",
-      "releaseSha256": "d231f53ee677d1aaa7828ac136b23f84df2204e6ff97f21adeb1f7eaa20451ad",
-      "reviewSha256": "d231f53ee677d1aaa7828ac136b23f84df2204e6ff97f21adeb1f7eaa20451ad"
+      "releaseSha256": "1fb3de395d52cad4151dcdaee2f66584834f6901b8dc42eb4eddefc43bfeeb0a",
+      "reviewSha256": "1fb3de395d52cad4151dcdaee2f66584834f6901b8dc42eb4eddefc43bfeeb0a",
+      "baseAppReleaseSha256": "d231f53ee677d1aaa7828ac136b23f84df2204e6ff97f21adeb1f7eaa20451ad"
     },
     {
       "path": "apps/api/src/product-query-http.ts",
@@ -1203,8 +1210,9 @@
     {
       "path": "apps/api/src/production-application-host.ts",
       "reviewFile": "apps/api/src/production-application-host.ts",
-      "releaseSha256": "3b94cb616a57afa2e1bd19660d31063f689f8c95f43274b3ed77bcd403b6e5c8",
-      "reviewSha256": "3b94cb616a57afa2e1bd19660d31063f689f8c95f43274b3ed77bcd403b6e5c8"
+      "releaseSha256": "aa9e23491bbab3676809a8f47566a63c4b5e7512315e0c5c5a8a1ec0082b5121",
+      "reviewSha256": "aa9e23491bbab3676809a8f47566a63c4b5e7512315e0c5c5a8a1ec0082b5121",
+      "baseAppReleaseSha256": "3b94cb616a57afa2e1bd19660d31063f689f8c95f43274b3ed77bcd403b6e5c8"
     },
     {
       "path": "apps/api/src/production-capacity-launch.ts",
@@ -1377,14 +1385,16 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/catalogue/category-page.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/catalogue/category-page.tsx",
-      "releaseSha256": "85bdcadec5aa095a10b95245a3d8f00d58f4cf697e65ec50cab16253910d2476",
-      "reviewSha256": "85bdcadec5aa095a10b95245a3d8f00d58f4cf697e65ec50cab16253910d2476"
+      "releaseSha256": "429d4db4df20c1f6cd89ff863f57ebc37f18ab26579e242ac9da8d1abf21481e",
+      "reviewSha256": "429d4db4df20c1f6cd89ff863f57ebc37f18ab26579e242ac9da8d1abf21481e",
+      "baseAppReleaseSha256": "85bdcadec5aa095a10b95245a3d8f00d58f4cf697e65ec50cab16253910d2476"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/catalogue/dictionary-page.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/catalogue/dictionary-page.tsx",
-      "releaseSha256": "89fb31de61c758bd097710cb32757f81272933cfc2a4a850ade4e3f4b9f516f3",
-      "reviewSha256": "89fb31de61c758bd097710cb32757f81272933cfc2a4a850ade4e3f4b9f516f3"
+      "releaseSha256": "2fe98e8f4fcca7f1a4e562b7991d8c236eb252c3c16319dedaaefb046944d3f8",
+      "reviewSha256": "2fe98e8f4fcca7f1a4e562b7991d8c236eb252c3c16319dedaaefb046944d3f8",
+      "baseAppReleaseSha256": "89fb31de61c758bd097710cb32757f81272933cfc2a4a850ade4e3f4b9f516f3"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/catalogue/entry.tsx",
@@ -1485,8 +1495,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/common/runtime-host.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/common/runtime-host.tsx",
-      "releaseSha256": "545f232a5cb971e4748ea9f29e4cd1771724477d6fc5879d69b4c4979647cab4",
-      "reviewSha256": "545f232a5cb971e4748ea9f29e4cd1771724477d6fc5879d69b4c4979647cab4"
+      "releaseSha256": "fa2490ba7431e96e4a95d6835d204432f8bdd24902fd5108667de46bdc19c8a1",
+      "reviewSha256": "fa2490ba7431e96e4a95d6835d204432f8bdd24902fd5108667de46bdc19c8a1",
+      "baseAppReleaseSha256": "545f232a5cb971e4748ea9f29e4cd1771724477d6fc5879d69b4c4979647cab4"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/common/session.ts",
@@ -1557,8 +1568,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/history-page.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/history-page.tsx",
-      "releaseSha256": "e758a531f0ccd604369f71be5a98e1697f11317268316899823765707958af77",
-      "reviewSha256": "e758a531f0ccd604369f71be5a98e1697f11317268316899823765707958af77"
+      "releaseSha256": "368d02f740a4c771b1607e1c8eb470e9cfe54d66c15f813b4a209f505681e7d5",
+      "reviewSha256": "368d02f740a4c771b1607e1c8eb470e9cfe54d66c15f813b4a209f505681e7d5",
+      "baseAppReleaseSha256": "e758a531f0ccd604369f71be5a98e1697f11317268316899823765707958af77"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/history-reader.ts",
@@ -1599,8 +1611,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/ordinary-list-totals.ts",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/ordinary-list-totals.ts",
-      "releaseSha256": "03fc3dbf5eac56379cb2e4c631db8cfe56ab7cef8efba7671035953fd9884247",
-      "reviewSha256": "03fc3dbf5eac56379cb2e4c631db8cfe56ab7cef8efba7671035953fd9884247"
+      "releaseSha256": "bb23ccbb3268080d89c941a73643df3742681270accb5ee33f031b1e69d840f7",
+      "reviewSha256": "bb23ccbb3268080d89c941a73643df3742681270accb5ee33f031b1e69d840f7",
+      "baseAppReleaseSha256": "03fc3dbf5eac56379cb2e4c631db8cfe56ab7cef8efba7671035953fd9884247"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/proposal-form.tsx",
@@ -1647,8 +1660,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/sales-entry.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/sales-entry.tsx",
-      "releaseSha256": "de6dfbd7048fc3d0526483ee2ce09798e668acf72938c7baeddd1f4b69a32a81",
-      "reviewSha256": "de6dfbd7048fc3d0526483ee2ce09798e668acf72938c7baeddd1f4b69a32a81"
+      "releaseSha256": "bc14ba5a6cf12bccdd5cbf248ff8378ede7b11cd68b48d67201e0b9b489048f7",
+      "reviewSha256": "bc14ba5a6cf12bccdd5cbf248ff8378ede7b11cd68b48d67201e0b9b489048f7",
+      "baseAppReleaseSha256": "de6dfbd7048fc3d0526483ee2ce09798e668acf72938c7baeddd1f4b69a32a81"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/sales-feature.ts",
@@ -1707,8 +1721,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/sales-session.ts",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/sales-session.ts",
-      "releaseSha256": "85b2ca426edbf6e3c90358fa7e5f8b13806afd9a4cca4914ac9f37a32f0343e3",
-      "reviewSha256": "85b2ca426edbf6e3c90358fa7e5f8b13806afd9a4cca4914ac9f37a32f0343e3"
+      "releaseSha256": "46116c14518fb111fca2955a58372db1f114720bfcbd7d3594c59cd7a0388f66",
+      "reviewSha256": "46116c14518fb111fca2955a58372db1f114720bfcbd7d3594c59cd7a0388f66",
+      "baseAppReleaseSha256": "85b2ca426edbf6e3c90358fa7e5f8b13806afd9a4cca4914ac9f37a32f0343e3"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/sales-write-recovery.tsx",
@@ -1755,8 +1770,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-entry.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/transfers-entry.tsx",
-      "releaseSha256": "cb3d93e913026afd8ebfc0b93712e3c0bf55837ba2d24894ec83d84a568ba2d8",
-      "reviewSha256": "cb3d93e913026afd8ebfc0b93712e3c0bf55837ba2d24894ec83d84a568ba2d8"
+      "releaseSha256": "e9a2c5326082f4f982a917c95b0901403571cd2dc2b1718cfcbeaf1e29ec0f08",
+      "reviewSha256": "e9a2c5326082f4f982a917c95b0901403571cd2dc2b1718cfcbeaf1e29ec0f08",
+      "baseAppReleaseSha256": "cb3d93e913026afd8ebfc0b93712e3c0bf55837ba2d24894ec83d84a568ba2d8"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-feature.ts",
@@ -1767,8 +1783,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-history-page.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/transfers-history-page.tsx",
-      "releaseSha256": "1b4ed3af803817acd0e469629661fc09948f3bff2e79509230fc5c7c569e1e12",
-      "reviewSha256": "1b4ed3af803817acd0e469629661fc09948f3bff2e79509230fc5c7c569e1e12"
+      "releaseSha256": "09a8ef062ad8fdb38f5dc49b9626d7350522e9c063f76e28e62937c420c81132",
+      "reviewSha256": "09a8ef062ad8fdb38f5dc49b9626d7350522e9c063f76e28e62937c420c81132",
+      "baseAppReleaseSha256": "1b4ed3af803817acd0e469629661fc09948f3bff2e79509230fc5c7c569e1e12"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-history.tsx",
@@ -1797,8 +1814,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-session.ts",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/documents/transfers-session.ts",
-      "releaseSha256": "3280446e626514dddb770de4676730f411a0d0d90a2d9a9fbad7828a4c9ebf9e",
-      "reviewSha256": "3280446e626514dddb770de4676730f411a0d0d90a2d9a9fbad7828a4c9ebf9e"
+      "releaseSha256": "ba39b4b647dd10d2e9ca2e8b94910433a770687be7eaca49cbee26f21087be67",
+      "reviewSha256": "ba39b4b647dd10d2e9ca2e8b94910433a770687be7eaca49cbee26f21087be67",
+      "baseAppReleaseSha256": "3280446e626514dddb770de4676730f411a0d0d90a2d9a9fbad7828a4c9ebf9e"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/documents/transfers-view.tsx",
@@ -1815,8 +1833,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/candidates.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/inventory/candidates.tsx",
-      "releaseSha256": "22f86b6e13ddcd0c17727faf29bdc60ad4581723bd55b75053a8336ea084779e",
-      "reviewSha256": "22f86b6e13ddcd0c17727faf29bdc60ad4581723bd55b75053a8336ea084779e"
+      "releaseSha256": "addcd7697668e7f0028f3751a0a4b0b2a79206a355409653dcd3668145338629",
+      "reviewSha256": "addcd7697668e7f0028f3751a0a4b0b2a79206a355409653dcd3668145338629",
+      "baseAppReleaseSha256": "22f86b6e13ddcd0c17727faf29bdc60ad4581723bd55b75053a8336ea084779e"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/dialog.tsx",
@@ -1833,8 +1852,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/feature.ts",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/inventory/feature.ts",
-      "releaseSha256": "987dd66b21d129b09d14dbd04fcb23aca7116a0ab4d49bd25db7b73db7511199",
-      "reviewSha256": "987dd66b21d129b09d14dbd04fcb23aca7116a0ab4d49bd25db7b73db7511199"
+      "releaseSha256": "f68703df7cdaec3c30a028150b72b17448f2cc3135c7d36f6312ad6f42d88d08",
+      "reviewSha256": "f68703df7cdaec3c30a028150b72b17448f2cc3135c7d36f6312ad6f42d88d08",
+      "baseAppReleaseSha256": "987dd66b21d129b09d14dbd04fcb23aca7116a0ab4d49bd25db7b73db7511199"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/filter-selection.ts",
@@ -1881,8 +1901,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/page.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/inventory/page.tsx",
-      "releaseSha256": "b870d700049afbc15e97fb349315c02468270853e81f540afcabc88010db7075",
-      "reviewSha256": "b870d700049afbc15e97fb349315c02468270853e81f540afcabc88010db7075"
+      "releaseSha256": "5c1dd0b204986eb137ca45c642868dd8905a362bf38bdb3983a0b8cb756a89f9",
+      "reviewSha256": "5c1dd0b204986eb137ca45c642868dd8905a362bf38bdb3983a0b8cb756a89f9",
+      "baseAppReleaseSha256": "b870d700049afbc15e97fb349315c02468270853e81f540afcabc88010db7075"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/inventory/source-control-css.ts",
@@ -1905,8 +1926,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/detail.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/products/detail.tsx",
-      "releaseSha256": "54b1ccda6eb697d1952d11fbba94e97c4b8749ad4755240b5e96d592d5ad5d83",
-      "reviewSha256": "54b1ccda6eb697d1952d11fbba94e97c4b8749ad4755240b5e96d592d5ad5d83"
+      "releaseSha256": "708371ef061cb3278c5dd53cd5bbbdf012075b479606a943c910822f2acd4cc5",
+      "reviewSha256": "708371ef061cb3278c5dd53cd5bbbdf012075b479606a943c910822f2acd4cc5",
+      "baseAppReleaseSha256": "54b1ccda6eb697d1952d11fbba94e97c4b8749ad4755240b5e96d592d5ad5d83"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/document-activation.ts",
@@ -1977,20 +1999,23 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/feature.ts",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/products/feature.ts",
-      "releaseSha256": "743571e6c6d133c54f039534030ab539c50b975f6d602fddaa62916abb6d16ce",
-      "reviewSha256": "743571e6c6d133c54f039534030ab539c50b975f6d602fddaa62916abb6d16ce"
+      "releaseSha256": "4cb095a778cb3521df86b9d61b3e31908b1f66763d719a6b3702d3d959ed590a",
+      "reviewSha256": "4cb095a778cb3521df86b9d61b3e31908b1f66763d719a6b3702d3d959ed590a",
+      "baseAppReleaseSha256": "743571e6c6d133c54f039534030ab539c50b975f6d602fddaa62916abb6d16ce"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/filters.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/products/filters.tsx",
-      "releaseSha256": "8feb82673d60b1bf429e4ed8840cc3ba4794149f58f9196427adac769d596439",
-      "reviewSha256": "8feb82673d60b1bf429e4ed8840cc3ba4794149f58f9196427adac769d596439"
+      "releaseSha256": "50ef5a527d4129a67f3a7c2520ffd82dc6030b884e452c3ab7c498fdee1b3504",
+      "reviewSha256": "50ef5a527d4129a67f3a7c2520ffd82dc6030b884e452c3ab7c498fdee1b3504",
+      "baseAppReleaseSha256": "8feb82673d60b1bf429e4ed8840cc3ba4794149f58f9196427adac769d596439"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/index.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/products/index.tsx",
-      "releaseSha256": "582f7dd14124b5d092915bc1ab0b8107a1d902fbad89d44d7dea6c922874ced1",
-      "reviewSha256": "582f7dd14124b5d092915bc1ab0b8107a1d902fbad89d44d7dea6c922874ced1"
+      "releaseSha256": "496a796fec7328055adda776533951397b0629d42da815b6b6fd655c4cb0695d",
+      "reviewSha256": "496a796fec7328055adda776533951397b0629d42da815b6b6fd655c4cb0695d",
+      "baseAppReleaseSha256": "582f7dd14124b5d092915bc1ab0b8107a1d902fbad89d44d7dea6c922874ced1"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/inventory-drawer.tsx",
@@ -2001,8 +2026,9 @@
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/list.tsx",
       "reviewFile": "apps/web/demo-replica/frontend/runtime/products/list.tsx",
-      "releaseSha256": "c1a7cf950faadd002e0517ff0accc925598e633f2301e9d908625f02bce63e31",
-      "reviewSha256": "c1a7cf950faadd002e0517ff0accc925598e633f2301e9d908625f02bce63e31"
+      "releaseSha256": "d6660eba083eb2878c51d3c7ed2070b56b0c886a17153263ed8be046d71937ac",
+      "reviewSha256": "d6660eba083eb2878c51d3c7ed2070b56b0c886a17153263ed8be046d71937ac",
+      "baseAppReleaseSha256": "c1a7cf950faadd002e0517ff0accc925598e633f2301e9d908625f02bce63e31"
     },
     {
       "path": "apps/web/demo-replica/frontend/runtime/products/photos.tsx",
@@ -2481,8 +2507,9 @@
     {
       "path": "apps/web/src/components/document-output-contracts.ts",
       "reviewFile": "apps/web/src/components/document-output-contracts.ts",
-      "releaseSha256": "4f7fd07f20cfe8d02f3d477f536d9297cfeb05da5baecbd2055c1e3bd7b29f5f",
-      "reviewSha256": "4f7fd07f20cfe8d02f3d477f536d9297cfeb05da5baecbd2055c1e3bd7b29f5f"
+      "releaseSha256": "8fd0c7124f4f35bb5364fcf29fdf237d8c46252789a454945577698631961227",
+      "reviewSha256": "8fd0c7124f4f35bb5364fcf29fdf237d8c46252789a454945577698631961227",
+      "baseAppReleaseSha256": "4f7fd07f20cfe8d02f3d477f536d9297cfeb05da5baecbd2055c1e3bd7b29f5f"
     },
     {
       "path": "apps/web/src/components/document-output.css",
@@ -2619,8 +2646,9 @@
     {
       "path": "apps/web/src/inventory/output-adapter.ts",
       "reviewFile": "apps/web/src/inventory/output-adapter.ts",
-      "releaseSha256": "227ddf03291dc4d7e40a4de806755e944681fcdc22149ca66f1e27fddf4d0c71",
-      "reviewSha256": "227ddf03291dc4d7e40a4de806755e944681fcdc22149ca66f1e27fddf4d0c71"
+      "releaseSha256": "0641e47f78758a11900e20cc0fd77fd2ec1ffa6dc54e460377b14edc94597f90",
+      "reviewSha256": "0641e47f78758a11900e20cc0fd77fd2ec1ffa6dc54e460377b14edc94597f90",
+      "baseAppReleaseSha256": "227ddf03291dc4d7e40a4de806755e944681fcdc22149ca66f1e27fddf4d0c71"
     },
     {
       "path": "apps/web/src/inventory/output-budget.ts",
@@ -2871,14 +2899,16 @@
     {
       "path": "apps/web/src/sales/historical-hall-note.tsx",
       "reviewFile": "apps/web/src/sales/historical-hall-note.tsx",
-      "releaseSha256": "e6183d36f7d461fa294aed77cc2d7d5847f223b1f554bb2092626e997c053f83",
-      "reviewSha256": "e6183d36f7d461fa294aed77cc2d7d5847f223b1f554bb2092626e997c053f83"
+      "releaseSha256": "a173622784bea83e027c45dd55e8ab7d7d64a6f41356d0c82979819f50330c70",
+      "reviewSha256": "a173622784bea83e027c45dd55e8ab7d7d64a6f41356d0c82979819f50330c70",
+      "baseAppReleaseSha256": "e6183d36f7d461fa294aed77cc2d7d5847f223b1f554bb2092626e997c053f83"
     },
     {
       "path": "apps/web/src/sales/historical-hall.ts",
       "reviewFile": "apps/web/src/sales/historical-hall.ts",
-      "releaseSha256": "0dcc24abe0832a36a88bf74283e285ff47050c6192bd674fa38df4f8945f8d72",
-      "reviewSha256": "0dcc24abe0832a36a88bf74283e285ff47050c6192bd674fa38df4f8945f8d72"
+      "releaseSha256": "b181e594085b8e9df36bc2253a5d6f9a109f4e0ab5842a3934ae956f1f5fb302",
+      "reviewSha256": "b181e594085b8e9df36bc2253a5d6f9a109f4e0ab5842a3934ae956f1f5fb302",
+      "baseAppReleaseSha256": "0dcc24abe0832a36a88bf74283e285ff47050c6192bd674fa38df4f8945f8d72"
     },
     {
       "path": "apps/web/src/sales/history-http-reader.ts",
@@ -2907,8 +2937,9 @@
     {
       "path": "apps/web/src/settings/audit/contracts.ts",
       "reviewFile": "apps/web/src/settings/audit/contracts.ts",
-      "releaseSha256": "1670b3eeb1ae483a354e514089e985df62119e461c440f3204b298382c7e3670",
-      "reviewSha256": "1670b3eeb1ae483a354e514089e985df62119e461c440f3204b298382c7e3670"
+      "releaseSha256": "68218dc0e66e3562235dc84771e56845ba62d826bafde16df427fc2f227785da",
+      "reviewSha256": "68218dc0e66e3562235dc84771e56845ba62d826bafde16df427fc2f227785da",
+      "baseAppReleaseSha256": "1670b3eeb1ae483a354e514089e985df62119e461c440f3204b298382c7e3670"
     },
     {
       "path": "apps/web/src/settings/audit/controller.ts",
@@ -2919,8 +2950,9 @@
     {
       "path": "apps/web/src/settings/audit/http-reader.ts",
       "reviewFile": "apps/web/src/settings/audit/http-reader.ts",
-      "releaseSha256": "4719a9ed0f0232c1616c4aabfb1de464e2aad7bf794feb555668b9e162c7d56e",
-      "reviewSha256": "4719a9ed0f0232c1616c4aabfb1de464e2aad7bf794feb555668b9e162c7d56e"
+      "releaseSha256": "8f519647e03f16371af17da678c616d66a8dec490ad7386c5fab9f78f5d4fa28",
+      "reviewSha256": "8f519647e03f16371af17da678c616d66a8dec490ad7386c5fab9f78f5d4fa28",
+      "baseAppReleaseSha256": "4719a9ed0f0232c1616c4aabfb1de464e2aad7bf794feb555668b9e162c7d56e"
     },
     {
       "path": "apps/web/src/settings/stores/controller.ts",
@@ -3339,8 +3371,9 @@
     {
       "path": "packages/application/src/inventory-query-response.ts",
       "reviewFile": "packages/application/src/inventory-query-response.ts",
-      "releaseSha256": "8b070c0e48e24fd0345bb30b4ea2f3e3aafff472644bb5296a14b67a961946b5",
-      "reviewSha256": "8b070c0e48e24fd0345bb30b4ea2f3e3aafff472644bb5296a14b67a961946b5"
+      "releaseSha256": "42fafcea7fb2361f1b881fb6dfb1c73003834fed625ecec8dea53f02866a6cb7",
+      "reviewSha256": "42fafcea7fb2361f1b881fb6dfb1c73003834fed625ecec8dea53f02866a6cb7",
+      "baseAppReleaseSha256": "8b070c0e48e24fd0345bb30b4ea2f3e3aafff472644bb5296a14b67a961946b5"
     },
     {
       "path": "packages/application/src/inventory-query-service.ts",
@@ -3567,8 +3600,9 @@
     {
       "path": "packages/application/src/sales-native-facts.ts",
       "reviewFile": "packages/application/src/sales-native-facts.ts",
-      "releaseSha256": "0d642dd4e7e95e1d23d832e9d78c92358c2daa66402dda52e78bf9a594d463fc",
-      "reviewSha256": "0d642dd4e7e95e1d23d832e9d78c92358c2daa66402dda52e78bf9a594d463fc"
+      "releaseSha256": "41269665ebb0d19339723a210bd6594b455b6c88620c5b819a1b9e2ad19a1b25",
+      "reviewSha256": "41269665ebb0d19339723a210bd6594b455b6c88620c5b819a1b9e2ad19a1b25",
+      "baseAppReleaseSha256": "0d642dd4e7e95e1d23d832e9d78c92358c2daa66402dda52e78bf9a594d463fc"
     },
     {
       "path": "packages/application/src/sales-payload-budget.ts",
@@ -3615,8 +3649,9 @@
     {
       "path": "packages/application/src/settings-audit-ports.ts",
       "reviewFile": "packages/application/src/settings-audit-ports.ts",
-      "releaseSha256": "e7847cbcc343bc37dc7106ecd5b1c73fade5fac21a9e7b979e17d347eb4e897e",
-      "reviewSha256": "e7847cbcc343bc37dc7106ecd5b1c73fade5fac21a9e7b979e17d347eb4e897e"
+      "releaseSha256": "2ac9e98732973552079f79ae8ee19c1b4094f02c86f6204065ada854899ca77b",
+      "reviewSha256": "2ac9e98732973552079f79ae8ee19c1b4094f02c86f6204065ada854899ca77b",
+      "baseAppReleaseSha256": "e7847cbcc343bc37dc7106ecd5b1c73fade5fac21a9e7b979e17d347eb4e897e"
     },
     {
       "path": "packages/application/src/settings-audit-service.ts",
@@ -3627,8 +3662,9 @@
     {
       "path": "packages/application/src/settings-audit-validation.ts",
       "reviewFile": "packages/application/src/settings-audit-validation.ts",
-      "releaseSha256": "2267c23b4452293a3bb1c5482f434d1495e3b43bcce27d235e1138639b65e4d2",
-      "reviewSha256": "2267c23b4452293a3bb1c5482f434d1495e3b43bcce27d235e1138639b65e4d2"
+      "releaseSha256": "35bce84bb71b44cdd88a8a50b2bd9e6b9bc6f4388fa3f3ae88d66123bb3a40da",
+      "reviewSha256": "35bce84bb71b44cdd88a8a50b2bd9e6b9bc6f4388fa3f3ae88d66123bb3a40da",
+      "baseAppReleaseSha256": "2267c23b4452293a3bb1c5482f434d1495e3b43bcce27d235e1138639b65e4d2"
     },
     {
       "path": "packages/application/src/source-confirmed-current-form-authorization.ts",
@@ -5593,7 +5629,7 @@
     },
     {
       "path": "adapters/postgres/src/ordinary-document-list-reader.ts",
-      "reviewFile": "adapters/postgres/src/ordinary-document-list-reader.ts",
+      "reviewFile": "release-audit/writer-overlay/adapters/postgres/src/ordinary-document-list-reader.ts",
       "releaseSha256": "8f4ecdb99ef8581b1eee717c769097b85d2db77bec159f5253a34440853c11c1",
       "reviewSha256": "8f4ecdb99ef8581b1eee717c769097b85d2db77bec159f5253a34440853c11c1"
     },
@@ -5653,7 +5689,7 @@
     },
     {
       "path": "adapters/postgres/src/sales-native-facts.ts",
-      "reviewFile": "adapters/postgres/src/sales-native-facts.ts",
+      "reviewFile": "release-audit/writer-overlay/adapters/postgres/src/sales-native-facts.ts",
       "releaseSha256": "3dfbe94088058c611e234ee826134858cbf3d9a7a20404a35b8cb9e982d0a79a",
       "reviewSha256": "3dfbe94088058c611e234ee826134858cbf3d9a7a20404a35b8cb9e982d0a79a"
     },
@@ -5665,7 +5701,7 @@
     },
     {
       "path": "adapters/postgres/src/sales-unit-of-work.ts",
-      "reviewFile": "adapters/postgres/src/sales-unit-of-work.ts",
+      "reviewFile": "release-audit/writer-overlay/adapters/postgres/src/sales-unit-of-work.ts",
       "releaseSha256": "cf9d32c45f6bd1562a23e71bdea7fbcf30cd81d3481f212ce4fe9db31b721268",
       "reviewSha256": "cf9d32c45f6bd1562a23e71bdea7fbcf30cd81d3481f212ce4fe9db31b721268"
     },
@@ -5857,7 +5893,7 @@
     },
     {
       "path": "packages/application/src/inventory-query-response.ts",
-      "reviewFile": "packages/application/src/inventory-query-response.ts",
+      "reviewFile": "release-audit/writer-overlay/packages/application/src/inventory-query-response.ts",
       "releaseSha256": "8b070c0e48e24fd0345bb30b4ea2f3e3aafff472644bb5296a14b67a961946b5",
       "reviewSha256": "8b070c0e48e24fd0345bb30b4ea2f3e3aafff472644bb5296a14b67a961946b5"
     },
@@ -5965,7 +6001,7 @@
     },
     {
       "path": "packages/application/src/ports.ts",
-      "reviewFile": "packages/application/src/ports.ts",
+      "reviewFile": "release-audit/writer-overlay/packages/application/src/ports.ts",
       "releaseSha256": "af6ec28691b68adde916797f8b0e5ff5bef4156422a3a7e667700485e0062050",
       "reviewSha256": "af6ec28691b68adde916797f8b0e5ff5bef4156422a3a7e667700485e0062050"
     },
@@ -6043,7 +6079,7 @@
     },
     {
       "path": "packages/application/src/sales-native-facts.ts",
-      "reviewFile": "packages/application/src/sales-native-facts.ts",
+      "reviewFile": "release-audit/writer-overlay/packages/application/src/sales-native-facts.ts",
       "releaseSha256": "0d642dd4e7e95e1d23d832e9d78c92358c2daa66402dda52e78bf9a594d463fc",
       "reviewSha256": "0d642dd4e7e95e1d23d832e9d78c92358c2daa66402dda52e78bf9a594d463fc"
     },
@@ -7505,5 +7541,18 @@
     "appSourceCommit": "579fd9d9e8baabd2b1d686d2a01974767a874413",
     "appArchiveMembers": 544,
     "appNativeMembers": 305
+  },
+  "candidateApplication": {
+    "parentReviewCommit": "072e124c0d59bda8de59c2229c20f413e279840b",
+    "buildReference": "version.appSourceCommit and archive counts identify the baseline, not the new candidate",
+    "applicationPathsUpdated": 36,
+    "writerPathsRetainedSeparately": [
+      "adapters/postgres/src/ordinary-document-list-reader.ts",
+      "adapters/postgres/src/sales-native-facts.ts",
+      "adapters/postgres/src/sales-unit-of-work.ts",
+      "packages/application/src/inventory-query-response.ts",
+      "packages/application/src/ports.ts",
+      "packages/application/src/sales-native-facts.ts"
+    ]
   }
 }

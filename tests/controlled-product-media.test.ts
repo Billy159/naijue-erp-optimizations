@@ -5,6 +5,7 @@ import { mkdtemp, realpath, writeFile, unlink, symlink, rm } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import { PrivateControlledProductMedia } from "../adapters/media/src/controlled-product-media.ts";
 import type { PrivateProductMediaManifest } from "../adapters/media/src/controlled-product-media.ts";
 import type { ProductImageMetadata } from "../packages/application/src/product-query-ports.ts";
@@ -12,6 +13,11 @@ import { DomainError } from "../packages/domain/src/errors.ts";
 import { actor, sid } from "./support/synthetic-fixtures.ts";
 const productId = sid("product", 12001), imageId = sid("product", 12002);
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=", "base64");
+function deferredVoid(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 const digest = createHash("sha256").update(png).digest("hex");
 const image: ProductImageMetadata = { id: imageId, productId, fileRef: "PRIVATE_ORIGINAL_REF", mime: "image/png", byteSize: BigInt(png.length), displayOrder: 0 };
 async function fixture(t: { after(fn: () => Promise<void>): void }) {
@@ -68,4 +74,125 @@ test("W15 changed blob digest, wrong membership and invalid private manifest fai
   const html = Buffer.from("<html>not an image</html>"); await writeFile(f.thumb, html);
   f.setManifest({ ...m, thumbnail: { ...m.thumbnail!, byteSize: BigInt(html.length), sha256: createHash("sha256").update(html).digest("hex") } });
   await assert.rejects(f.provider.deliver(await f.input()), { code: "PRODUCT_MEDIA_NOT_READY" });
+});
+test("W15 private manifest batches preserve requested image order and reject an unknown ID", async t => {
+  const f = await fixture(t), template = f.manifest();
+  const images = Array.from({ length: 1000 }, (_, n) => ({
+    ...image, id: sid("product", 13000 + n), fileRef: `SYNTHETIC_${n}`, displayOrder: n,
+  }));
+  const manifests = new Map(images.slice().reverse().map(i => [i.id, { ...template, imageId: i.id, fileRef: i.fileRef }]));
+  const provider = new PrivateControlledProductMedia({ ...f.options, manifests: { async resolve() { return manifests; } } });
+  const read = { ...f.read, images };
+  const links = await provider.resolveThumbnails(read);
+  assert.deepEqual(links.map(link => link.imageId), images.map(i => i.id));
+  manifests.delete(images[0]!.id);
+  const unknownId = sid("product", 14001);
+  manifests.set(unknownId, { ...template, imageId: unknownId });
+  await assert.rejects(provider.resolveThumbnails(read), { code: "PRODUCT_MEDIA_NOT_READY" });
+});
+test("W15 the same private revision is reauthorized after an account switch", async t => {
+  const f = await fixture(t), input = await f.input();
+  const switched = { ...actor, accountId: sid("account", 14002) };
+  const attempts: string[] = [];
+  const provider = new PrivateControlledProductMedia({
+    ...f.options,
+    authorization: { async authorize(current) {
+      attempts.push(current.accountId);
+      if (current.accountId === switched.accountId) throw new DomainError("FORBIDDEN", "SYNTHETIC");
+      return { productId };
+    } },
+  });
+  assert.deepEqual((await provider.deliver(input)).bytes, png);
+  await assert.rejects(provider.deliver({ ...input, actor: switched }), { code: "FORBIDDEN" });
+  assert.deepEqual(attempts, [actor.accountId, switched.accountId]);
+  assert.equal(f.counts().reads, 1);
+});
+
+test("W15 abort during private manifest resolution returns cancellation instead of media", async t => {
+  const f = await fixture(t), input = await f.input(), controller = new AbortController();
+  const entered = deferredVoid(), release = deferredVoid();
+  const provider = new PrivateControlledProductMedia({
+    ...f.options,
+    manifests: { async resolve() {
+      entered.resolve();
+      await release.promise;
+      return new Map([[imageId, f.manifest()]]);
+    } },
+  });
+  const delivery = provider.deliver({ ...input, signal: controller.signal });
+  await entered.promise;
+  controller.abort();
+  release.resolve();
+  await assert.rejects(delivery, { code: "PRODUCT_READ_ABORTED" });
+});
+
+test("W15 overlapping fresh media requests share one actual file open and read, never a completed read", async t => {
+  const f = await fixture(t), input = await f.input();
+  const fsPromises = createRequire(import.meta.url)("node:fs/promises") as typeof import("node:fs/promises");
+  const realOpen = fsPromises.open;
+  let opens = 0, reads = 0;
+  const opened = deferredVoid(), releaseOpen = deferredVoid();
+  const openMock = t.mock.method(fsPromises, "open", async (...args: Parameters<typeof realOpen>) => {
+    const handle = await realOpen(...args);
+    if (args[0] === f.thumb) {
+      opens++;
+      const realRead = handle.read.bind(handle);
+      handle.read = ((...readArgs: Parameters<typeof realRead>) => {
+        reads++;
+        return Reflect.apply(realRead, handle, readArgs);
+      }) as typeof handle.read;
+      if (opens === 1) {
+        opened.resolve();
+        await releaseOpen.promise;
+      }
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { openMock.mock.restore(); syncBuiltinESMExports(); });
+  const controller = new AbortController();
+  const cancelled = f.provider.deliver({ ...input, signal: controller.signal });
+  const rejection = assert.rejects(cancelled, { code: "PRODUCT_READ_ABORTED" });
+  const first = f.provider.deliver(input), second = f.provider.deliver(input);
+  await opened.promise;
+  controller.abort();
+  await rejection;
+  // Arrive after the first batch actually opened the file: this request must do fresh verification.
+  const late = await f.provider.deliver(input);
+  releaseOpen.resolve();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(opens, 2);
+  assert.equal(reads, 4); // each read loop reads payload bytes then probes EOF
+  assert.equal(f.counts().auths, 4);
+  assert.equal(f.counts().reads, 4);
+  a.bytes[0] = a.bytes[0]! ^ 0xff;
+  assert.deepEqual(b.bytes, png);
+  assert.deepEqual(late.bytes, png);
+  // Same version, same file length, different bytes: never serve the previous result.
+  await writeFile(f.thumb, Buffer.alloc(png.length, 12));
+  await Promise.all([
+    assert.rejects(f.provider.deliver(input), { code: "PRODUCT_MEDIA_NOT_READY" }),
+    assert.rejects(f.provider.deliver(input), { code: "PRODUCT_MEDIA_NOT_READY" }),
+  ]);
+  assert.equal(opens, 3);
+});
+
+test("W15 a response buffer copy failure settles every affected waiter and leaves no reusable read", async t => {
+  const f = await fixture(t), input = await f.input(), fakeSnapshot = Buffer.from(png);
+  const testOnly = f.provider as unknown as { bytes: () => Promise<Buffer> };
+  const readMock = t.mock.method(testOnly, "bytes", async () => fakeSnapshot);
+  const realFrom = Buffer.from;
+  const copyMock = t.mock.method(Buffer, "from", (...args: Parameters<typeof realFrom>) => {
+    if (Object.is(args[0], fakeSnapshot)) throw Error("synthetic copy failure");
+    return Reflect.apply(realFrom, Buffer, args) as Buffer;
+  });
+  try {
+    await Promise.all([
+      assert.rejects(f.provider.deliver(input), { code: "PRODUCT_MEDIA_NOT_READY" }),
+      assert.rejects(f.provider.deliver(input), { code: "PRODUCT_MEDIA_NOT_READY" }),
+    ]);
+    assert.equal(readMock.mock.callCount(), 1);
+    assert.deepEqual((await f.provider.deliver(input)).bytes, png);
+    assert.equal(readMock.mock.callCount(), 2);
+  } finally { copyMock.mock.restore(); }
 });

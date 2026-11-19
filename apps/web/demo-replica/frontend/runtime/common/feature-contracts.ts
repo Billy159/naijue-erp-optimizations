@@ -5,6 +5,7 @@ import type { InventoryMountOptions, InventoryProductContext, InventoryQuerySnap
 export interface ReadyPageOptions {
   readonly session: ReplicaSession;
   readonly routes: ProductionHostConfiguration['routes'];
+  readonly notify?: (message: string) => void;
   readonly newRequestKey: () => string;
   /** C opts in only when the original private HREV write capability is paired. Server authorizes independently. */
   readonly historyRevision?: Readonly<Partial<Record<'sales'|'transfers',boolean>>>;

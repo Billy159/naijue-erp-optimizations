@@ -43,8 +43,12 @@ export function createProductMaintenanceHttpPlugin(options: ProductMaintenanceHt
       if (request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() !== "application/json") return reply.code(415).send({ error: { code: "UNSUPPORTED_MEDIA_TYPE", message: "Use application/json" } });
       const controller = new AbortController(), abort = () => controller.abort(), close = () => { if (!reply.raw.writableFinished) controller.abort(); };
       request.raw.once("aborted", abort); reply.raw.once("close", close);
-      try { return await service.readImages(actor(request), request.body, controller.signal); }
-      finally { request.raw.off("aborted", abort); reply.raw.off("close", close); }
+      try {
+        // This route runs after authentication and body parsing, either of
+        // which can yield across a disconnect already seen by the socket.
+        if (request.raw.aborted || reply.raw.destroyed || reply.raw.socket?.destroyed) controller.abort();
+        return await service.readImages(actor(request), request.body, controller.signal);
+      } finally { request.raw.off("aborted", abort); reply.raw.off("close", close); }
     });
     app.post("/products/commands", { bodyLimit: 1_048_576 }, async (request, reply) => {
       assertNoQuery(request.query);

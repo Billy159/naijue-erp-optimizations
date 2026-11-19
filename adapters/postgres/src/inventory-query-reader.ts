@@ -114,9 +114,10 @@ async function verifyWarehouses(query: Query, scope: InventoryReadScope, batchId
   [scope.warehouses.map(row => row.id), scope.hallIds, batchId])).rows;
   integrity(rows.length === scope.warehouses.length, "Authorized warehouse/hall facts are stale or unavailable");
   const seen = new Set<string>(), additional: string[] = [];
+  const authorizedById = new Map<string, InventoryReadScope["warehouses"][number]>(scope.warehouses.map(warehouse => [warehouse.id, warehouse] as const));
   for (const row of rows) {
     const warehouseId = id("warehouse", row.id); const nativeHallId = id("hall", row.hall_id);
-    const authorized = scope.warehouses.find(item => item.id === warehouseId);
+    const authorized = authorizedById.get(warehouseId);
     integrity(authorized && !seen.has(warehouseId) && authorized.hallId === nativeHallId && authorized.label === label(row.name), "Authorized warehouse identity or display facts differ from native data");
     if (!booleanValue(row.published)) {
       requireDomain(runtime26 !== undefined, "INVENTORY_NOT_READY", "Authorized warehouse is outside the completely published scope"); additional.push(warehouseId);
@@ -189,11 +190,19 @@ async function verifyAdditionalSkus(query: Query, prefix: string, values: unknow
   requireDomain(booleanValue(row.all_admitted), "INVENTORY_NOT_READY", "New SKU creation is not qualified for the complete requested scope");
 }
 
-async function catalogStatus(query: Query, values: unknown[], seasonArray: boolean, runtime26?: NativeRuntime26Capability, retainedDelete = false, runtime27 = false): Promise<{ exactTotal: number; allMatchesTotal: InventoryStockTotal }> {
+async function catalogStatus(query: Query, values: unknown[], seasonArray: boolean, runtime26?: NativeRuntime26Capability, retainedDelete = false, runtime27 = false, pageSkuIds: readonly string[] = []): Promise<{ exactTotal: number; allMatchesTotal: InventoryStockTotal }> {
+  const excludePage = runtime27 && pageSkuIds.length > 0;
   const row = one(await query(`/* inventory:catalog-status */ ${catalog(seasonArray)}${runtime27 ? `, stock_facts AS MATERIALIZED (SELECT w.id warehouse_id,s.id sku_id,b.warehouse_id IS NOT NULL present,b.quantity,b.version,b.last_operation_id,
       CASE WHEN b.warehouse_id IS NULL THEN naijue_erp.standard_inventory_key_proof(w.id,s.id)->>'state' ELSE NULL END zero_proof_state,
       EXISTS(SELECT 1 FROM naijue_erp.inventory_ledger l WHERE l.warehouse_id=w.id AND l.sku_id=s.id) ledger_present
-      FROM authorized_warehouses w CROSS JOIN filtered_skus s LEFT JOIN naijue_erp.inventory_balance b ON b.warehouse_id=w.id AND b.sku_id=s.id)` : ''}
+      FROM authorized_warehouses w CROSS JOIN filtered_skus s LEFT JOIN naijue_erp.inventory_balance b ON b.warehouse_id=w.id AND b.sku_id=s.id
+      ${excludePage ? "WHERE NOT (s.id = ANY($9::uuid[]))" : ""}),
+      stock_summary AS (
+        SELECT coalesce(bool_or((present AND (NOT ledger_present OR quantity IS NULL OR version IS NULL OR version<=0 OR last_operation_id IS NULL))
+          OR (NOT present AND (ledger_present OR zero_proof_state IS NULL OR zero_proof_state NOT IN ('UNKNOWN','EXPLICIT_ZERO')))), false) AS invalid_balance,
+          count(*) FILTER (WHERE NOT present AND zero_proof_state IS DISTINCT FROM 'EXPLICIT_ZERO')::text AS unknown_count,
+          coalesce(sum(quantity) FILTER (WHERE present), 0)::text AS quantity
+        FROM stock_facts)` : ''}
     SELECT (SELECT count(*)::text FROM matched_products) AS exact_total,
     ${retainedDelete ? `EXISTS (SELECT 1 FROM naijue_erp.product_category child LEFT JOIN naijue_erp.product_category parent ON parent.id = child.parent_id
       WHERE child.parent_id IS NOT NULL AND child.deleted_at IS NULL
@@ -204,12 +213,11 @@ async function catalogStatus(query: Query, values: unknown[], seasonArray: boole
       WHERE r.import_batch_id = $8::uuid AND r.status = 'IMPORTED' AND r.target_type = 'SKU' AND r.target_id = s.id))`} AS uncovered_sku,
     EXISTS (SELECT 1 FROM filtered_skus s WHERE NOT EXISTS (
       SELECT 1 FROM naijue_erp.size_group_member m WHERE m.size_group_id = s.size_group_id AND m.size_id = s.size_id)) AS invalid_sku_size,
-    ${runtime27 ? `EXISTS(SELECT 1 FROM stock_facts WHERE (present AND (NOT ledger_present OR quantity IS NULL OR version IS NULL OR version<=0 OR last_operation_id IS NULL))
-      OR (NOT present AND (ledger_present OR zero_proof_state IS NULL OR zero_proof_state NOT IN ('UNKNOWN','EXPLICIT_ZERO'))))` : `EXISTS (SELECT 1 FROM naijue_erp.inventory_balance b JOIN filtered_skus s ON s.id = b.sku_id
+    ${runtime27 ? `(SELECT invalid_balance FROM stock_summary)` : `EXISTS (SELECT 1 FROM naijue_erp.inventory_balance b JOIN filtered_skus s ON s.id = b.sku_id
       JOIN authorized_warehouses w ON w.id = b.warehouse_id WHERE b.version <= 0 OR b.last_operation_id IS NULL)`} AS invalid_balance,
-    ${runtime27 ? `(SELECT count(*)::text FROM stock_facts WHERE NOT present AND zero_proof_state IS DISTINCT FROM 'EXPLICIT_ZERO')` : "'0'::text"} AS unknown_count,
-    (SELECT coalesce(sum(b.quantity), 0)::text FROM naijue_erp.inventory_balance b
-      JOIN filtered_skus s ON s.id = b.sku_id JOIN authorized_warehouses w ON w.id = b.warehouse_id) AS quantity`, values));
+    ${runtime27 ? `(SELECT unknown_count FROM stock_summary)` : "'0'::text"} AS unknown_count,
+    ${runtime27 ? '(SELECT quantity FROM stock_summary)' : `(SELECT coalesce(sum(b.quantity), 0)::text FROM naijue_erp.inventory_balance b
+      JOIN filtered_skus s ON s.id = b.sku_id JOIN authorized_warehouses w ON w.id = b.warehouse_id)`} AS quantity`, excludePage ? [...values, pageSkuIds] : values));
   // This is over the WHOLE requested filter, never just the visible product IDs.
   if (booleanValue(row.uncovered_sku)) {
     requireDomain(runtime26 !== undefined, "INVENTORY_NOT_READY", "Filtered catalogue contains SKU identities outside the published complete scope");
@@ -269,13 +277,14 @@ function pageProducts(productRows: readonly Row[], sizeRows: readonly Row[], sku
     integrity(product && product.sizeIds.has(sizeId) && !skuIds.has(skuId) && !coordinates.has(coordinate), "Native SKU identity or coordinate is inconsistent");
     skuIds.add(skuId); coordinates.add(coordinate); product.skus.push({ id: skuId, color, fit, sizeId });
   }
-  const balances = new Map<string, string>(), warehouseIds = new Set<string>(scope.warehouses.map(warehouse => warehouse.id));
+  // Keep the exact value until the output cell needs its canonical decimal text.
+  const balances = new Map<string, Map<string, bigint | null>>(scope.warehouses.map(warehouse => [warehouse.id, new Map<string, bigint | null>()] as const));
   for (const row of balanceRows) {
-    const warehouseId = id("warehouse", row.warehouse_id); const skuId = id("sku", row.sku_id); const key = `${warehouseId}:${skuId}`;
-    integrity(warehouseIds.has(warehouseId) && skuIds.has(skuId) && !balances.has(key), "Page balance is outside its requested formal key");
-    if(runtime27){integrity(typeof row.balance_present==="boolean"&&typeof row.ledger_present==="boolean","Missing exact stock presence evidence");if(!row.balance_present){integrity(row.ledger_present===false&&row.quantity===null&&row.version===null&&row.last_operation_id===null&&["UNKNOWN","EXPLICIT_ZERO"].includes(String(row.zero_proof_state)),"Missing balance conflicts with its native key proof or ledger");if(row.zero_proof_state==="EXPLICIT_ZERO")balances.set(key,"0");continue;}integrity(row.ledger_present===true,"Stored balance has no native ledger");}
+    const warehouseId = id("warehouse", row.warehouse_id); const skuId = id("sku", row.sku_id); const warehouseBalances = balances.get(warehouseId);
+    integrity(warehouseBalances && skuIds.has(skuId) && !warehouseBalances.has(skuId), "Page balance is outside its requested formal key");
+    if(runtime27){integrity(typeof row.balance_present==="boolean"&&typeof row.ledger_present==="boolean","Missing exact stock presence evidence");if(!row.balance_present){integrity(row.ledger_present===false&&row.quantity===null&&row.version===null&&row.last_operation_id===null&&["UNKNOWN","EXPLICIT_ZERO"].includes(String(row.zero_proof_state)),"Missing balance conflicts with its native key proof or ledger");warehouseBalances.set(skuId, row.zero_proof_state==="EXPLICIT_ZERO" ? 0n : null);continue;}integrity(row.ledger_present===true,"Stored balance has no native ledger");}
     versionFromSql(row.version); id("operation", row.last_operation_id);
-    balances.set(key, quantityFromSql(row.quantity).toString());
+    warehouseBalances.set(skuId, quantityFromSql(row.quantity));
   }
   let units = 0;
   return [...products.values()].map(product => {
@@ -295,16 +304,17 @@ function pageProducts(productRows: readonly Row[], sizeRows: readonly Row[], sku
     const colorFits: InventoryQueryColorFit[] = [...variants.values()].map(variant => {
       const variantSizeSums = product.sizes.map(() => 0n), variantSizeUnknown = product.sizes.map(() => 0); let variantSum = 0n, variantUnknown = 0;
       const rows = scope.warehouses.map(warehouse => {
+        const warehouseBalances = balances.get(warehouse.id)!;
         const cells: Record<string, InventoryStockCell> = {}; let sum = 0n, unknown = 0;
         for (let sizeIndex = 0; sizeIndex < product.sizes.length; sizeIndex++) {
           const size = product.sizes[sizeIndex]!; const skuId = variant.skus.get(size.id);
           if (skuId === undefined) cells[size.id] = { state: "not-applicable" };
           else {
             // Runtime 27 adds only individually proven sparse zeros to this map.
-            const stored = balances.get(`${warehouse.id}:${skuId}`);
-            if (runtime27 && stored === undefined) { cells[size.id] = { state: "unknown", skuId }; unknown++; variantSizeUnknown[sizeIndex] = variantSizeUnknown[sizeIndex]! + 1; }
-            else { const quantity = stored ?? "0"; cells[size.id] = { state: "known", skuId, quantity };
-              const exact = BigInt(quantity); sum += exact; variantSizeSums[sizeIndex] = variantSizeSums[sizeIndex]! + exact; }
+            const stored = warehouseBalances.get(skuId);
+            if (runtime27 && stored == null) { cells[size.id] = { state: "unknown", skuId }; unknown++; variantSizeUnknown[sizeIndex] = variantSizeUnknown[sizeIndex]! + 1; }
+            else { const exact = stored ?? 0n; cells[size.id] = { state: "known", skuId, quantity: exact === 0n ? "0" : exact.toString() };
+              sum += exact; variantSizeSums[sizeIndex] = variantSizeSums[sizeIndex]! + exact; }
           }
         }
         variantSum += sum; variantUnknown += unknown;
@@ -328,9 +338,9 @@ const productSelection = (seasonArray: boolean) => `SELECT p.id, p.product_code,
           su.name AS supplier_name, se.name AS season_name FROM matched_products mp JOIN naijue_erp.product p ON p.id = mp.id
         JOIN naijue_erp.product_category c ON c.id = p.category_id JOIN naijue_erp.size_group g ON g.id = p.size_group_id
         LEFT JOIN naijue_erp.supplier su ON su.id = p.supplier_id ${productSeasonLabelJoin(seasonArray)}`;
-async function productMatrices(query: Query, products: Row[], input: InventoryQuery, scope: InventoryReadScope, runtime27 = false): Promise<InventoryQueryProduct[]> {
+async function productMatrices(query: Query, products: Row[], input: InventoryQuery, scope: InventoryReadScope, runtime27 = false): Promise<{ matrices: InventoryQueryProduct[]; skuIds: string[] }> {
   bounded(products, input.pageSize); const pageIds = products.map(row => id("product", row.id));
-  let sizes: Row[] = []; let skus: Row[] = []; let balances: Row[] = [];
+  let sizes: Row[] = []; let skus: Row[] = []; let balances: Row[] = []; let skuIds: string[] = [];
   if (pageIds.length) {
     sizes = (await query(`/* inventory:sizes */ SELECT p.id AS product_id, p.size_group_id, m.size_id, s.name AS size_name, m.display_order
       FROM naijue_erp.product p JOIN naijue_erp.size_group_member m ON m.size_group_id = p.size_group_id
@@ -343,7 +353,7 @@ async function productMatrices(query: Query, products: Row[], input: InventoryQu
       WHERE s.product_id = ANY($1::uuid[]) AND (cardinality($2::uuid[]) = 0 OR s.fit_id = ANY($2::uuid[]))
       ORDER BY p.id, c.code COLLATE "C", c.id, f.code COLLATE "C", f.id, m.display_order, s.size_id, s.id LIMIT $3`,
     [pageIds, input.filter.fitIds, INVENTORY_READ_MAX_PAGE_SKUS + 1])).rows;
-    bounded(skus, INVENTORY_READ_MAX_PAGE_SKUS);
+    bounded(skus, INVENTORY_READ_MAX_PAGE_SKUS); skuIds = skus.map(row => id("sku", row.id));
     // Filter integrity and exact page SKU identities already belong to this RR snapshot. Do not repeat the catalogue scan for
     // sparse balances; retain the authorized warehouse/hall intersection in SQL.
     balances = (await query(runtime27 ? `/* inventory:balances */
@@ -357,10 +367,11 @@ async function productMatrices(query: Query, products: Row[], input: InventoryQu
       JOIN naijue_erp.warehouse w ON w.id = b.warehouse_id
       WHERE w.id = ANY($1::uuid[]) AND w.hall_id = ANY($2::uuid[]) AND b.sku_id = ANY($3::uuid[])
       ORDER BY b.warehouse_id, b.sku_id LIMIT $4`,
-    [scope.warehouses.map(warehouse => warehouse.id), scope.hallIds, skus.map(row => id("sku", row.id)), INVENTORY_READ_MAX_PAGE_BALANCES + 1])).rows;
+    [scope.warehouses.map(warehouse => warehouse.id), scope.hallIds, skuIds, INVENTORY_READ_MAX_PAGE_BALANCES + 1])).rows;
     bounded(balances, INVENTORY_READ_MAX_PAGE_BALANCES);
+    if (runtime27) integrity(balances.length === skuIds.length * scope.warehouses.length, "Page stock evidence does not cover every exact warehouse/SKU");
   }
-  return pageProducts(products, sizes, skus, balances, scope, runtime27);
+  return { matrices: pageProducts(products, sizes, skus, balances, scope, runtime27), skuIds };
 }
 
 /** Injected native PostgreSQL protocol reader. No Pool construction, legacy projection, source-file read,
@@ -426,17 +437,23 @@ export class PostgresInventoryQueryReader implements TrustedInventorySnapshotRea
       const values = parameters(scope, input.filter, batchId), status = await catalogStatus(query, values, seasonArray, runtime26, retainedDelete, runtime27), readReference = `inventory:${randomUUID()}`;
       const warehouseLabels = scope.warehouses.map(w => w.label);
       yield { kind: "summary", readReference, exactTotalProducts: status.exactTotal, warehouseLabels, allMatchesTotal: status.allMatchesTotal };
-      let count = 0, sum = 0n, unknown = 0, lastCode: string | null = null, lastId: string | null = null;
+      let count = 0, sum = 0n, unknown = 0, lastCode: Buffer | null = null, lastId: string | null = null;
+      const pageSource = `${catalog(seasonArray)} ${productSelection(seasonArray)} ORDER BY p.product_code COLLATE "C",p.id`;
+      const cursor = status.exactTotal > 100;
+      // For multi-batch output, let PostgreSQL reuse the ordered catalogue plan in
+      // this transaction. The non-holdable cursor is closed by COMMIT or ROLLBACK.
+      if (cursor) await query(`/* inventory:output-cursor */ DECLARE inventory_output_products NO SCROLL CURSOR FOR ${pageSource}`, values);
       while (count < status.exactTotal) {
-        const products = (await query(`/* inventory:output-products */ ${catalog(seasonArray)} ${productSelection(seasonArray)}
-          WHERE ($9::text IS NULL OR (p.product_code COLLATE "C",p.id) > ($9::text COLLATE "C",$10::uuid))
-          ORDER BY p.product_code COLLATE "C",p.id LIMIT $11`, [...values, lastCode, lastId, 100])).rows;
-        const pageInput = { ...input, page: count / 100 + 1 }, matrices = await productMatrices(query, products, input, scope, runtime27);
+        const products = (await (cursor
+          ? query("/* inventory:output-products */ FETCH FORWARD 100 FROM inventory_output_products")
+          : query(`/* inventory:output-products */ ${pageSource} LIMIT $9`, [...values, 100]))).rows;
+        const pageInput = { ...input, page: count / 100 + 1 }, { matrices } = await productMatrices(query, products, input, scope, runtime27);
         const page = checkedInventorySnapshot({ readReference, readiness: "ready", data: { page: pageInput.page, pageSize: 100, exactTotalProducts: status.exactTotal,
           products: matrices, warehouseLabels, allMatchesTotal: status.allMatchesTotal, readReference } }, pageInput, scope).data;
         for (const product of page.products) {
-          if (lastCode !== null) { const order = Buffer.compare(Buffer.from(lastCode), Buffer.from(product.code)); integrity(order < 0 || order === 0 && lastId! < product.id, "Inventory output keyset did not advance"); }
-          lastCode = product.code; lastId = product.id; count++; sum += BigInt(product.total.knownQuantity); unknown += product.total.unknownCells;
+          const code = Buffer.from(product.code);
+          if (lastCode !== null) { const order = Buffer.compare(lastCode, code); integrity(order < 0 || order === 0 && lastId! < product.id, "Inventory output product order did not advance"); }
+          lastCode = code; lastId = product.id; count++; sum += BigInt(product.total.knownQuantity); unknown += product.total.unknownCells;
           yield { kind: "product", product };
         }
       }
@@ -450,11 +467,21 @@ export class PostgresInventoryQueryReader implements TrustedInventorySnapshotRea
     checkedInventoryActor(read.actor); const input = checkedParameters(read.parameters); const scope = inventoryScope(read.scope, input);
     return this.snapshot(read.signal, async query => {
       const batchId = await publishedBatch(query, !!this.runtime27); await verifyWarehouses(query, scope, batchId, this.runtime26, !!this.runtime27);
-      const values = parameters(scope, input.filter, batchId); const status = await catalogStatus(query, values, this.seasonArray, this.runtime26, this.retainedDelete, !!this.runtime27);
+      const values = parameters(scope, input.filter, batchId);
+      let status = this.runtime27 ? undefined : await catalogStatus(query, values, this.seasonArray, this.runtime26, this.retainedDelete);
       const products = (await query(`/* inventory:products */ ${catalog(this.seasonArray)}
         ${productSelection(this.seasonArray)}
         ORDER BY p.product_code COLLATE "C", p.id LIMIT $9 OFFSET $10::bigint`, [...values, input.pageSize, String((input.page - 1) * input.pageSize)])).rows;
-      const matrices = await productMatrices(query, products, input, scope, !!this.runtime27);
+      const { matrices, skuIds } = await productMatrices(query, products, input, scope, !!this.runtime27);
+      if (!status) {
+        // Both partitions are read and qualified within one RR snapshot. The
+        // global catalogue checks still cover all matched products and SKUs.
+        const rest = await catalogStatus(query, values, this.seasonArray, this.runtime26, this.retainedDelete, true, skuIds);
+        let sum = aggregate(rest.allMatchesTotal.knownQuantity), unknown = rest.allMatchesTotal.unknownCells;
+        for (const product of matrices) { sum += aggregate(product.total.knownQuantity); unknown += product.total.unknownCells; }
+        integrity(Number.isSafeInteger(unknown), "Inventory count cannot be represented by the native DTO");
+        status = { exactTotal: rest.exactTotal, allMatchesTotal: total(sum, unknown) };
+      }
       const readReference = `inventory:${randomUUID()}`;
       return checkedInventorySnapshot({ readReference, readiness: "ready", data: { page: input.page, pageSize: input.pageSize, exactTotalProducts: status.exactTotal,
         products: matrices, warehouseLabels: scope.warehouses.map(row => row.label), allMatchesTotal: status.allMatchesTotal, readReference } }, input, scope);

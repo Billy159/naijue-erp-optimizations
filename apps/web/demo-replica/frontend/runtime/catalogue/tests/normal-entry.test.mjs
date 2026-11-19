@@ -197,15 +197,15 @@ try {
   assert.equal(commandCalls().at(-1).body.action, 'EDIT'); assert.equal(commandCalls().at(-1).body.expectedVersion, 1); assert.equal(document.querySelector('#pc-dict-form'), null); assert.equal(pages.hasUnresolvedWrite(), false);
   await click(button('编辑')); await click(button('删除')); await click(button('确认删除'));
   assert.equal(commandCalls().at(-1).body.action, 'DELETE'); assert.equal(commandCalls().at(-1).body.expectedVersion, 2); assert.equal(colors.length, 0); assert.equal(pages.hasUnresolvedWrite(), false);
-  colors.push(...Array.from({ length: 21 }, (_, i) => ({ id: sid(200 + i), code: String(i).padStart(3, '0'), name: 'SYNTHETIC MATCH 999', enabled: true, version: 1 })));
+  colors.push(...Array.from({ length: 101 }, (_, i) => ({ id: sid(2000 + i), code: String(i).padStart(3, '0'), name: 'SYNTHETIC MATCH 999', enabled: true, version: 1 })));
   await click(button('新增颜色')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC TARGET'); await type(document.querySelector('#pc-dict-code input'), '999');
   const writesBeforePagedSave = commandCalls().length;
   await click(button('确定'));
   assert.equal(commandCalls().length, writesBeforePagedSave + 1, 'paged verification never submits a second command');
   assert.ok(!document.querySelector('#pc-dict-form'), 'committed target on search page two must close after exact version readback');
   assert.equal(pages.hasUnresolvedWrite(), false);
-  assert.ok(calls.some(call => call.endpoint === '/catalogue-settings-read/colors/query' && call.body.search === '999' && call.body.page === 2 && call.body.pageSize === 20));
-  colors.unshift(...Array.from({ length: 20 }, (_, i) => ({ id: sid(300 + i), code: `0${i}`, name: 'SYNTHETIC MATCH 999', enabled: true, version: 1 })));
+  assert.ok(calls.some(call => call.endpoint === '/catalogue-settings-read/colors/query' && call.body.search === '999' && call.body.page === 2 && call.body.pageSize === 100));
+  colors.unshift(...Array.from({ length: 20 }, (_, i) => ({ id: sid(400 + i), code: `0${i}`, name: 'SYNTHETIC MATCH 999', enabled: true, version: 1 })));
   await type(host.querySelector('#pc-dict-search'), 'SYNTHETIC TARGET');
   await click(button('编辑')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC TARGET EDITED');
   readbackMode = 'duplicate'; const beforeUnconfirmed = commandCalls().length;
@@ -229,7 +229,7 @@ try {
   assert.ok(!document.querySelector('#pc-dict-form'), 'last page exact target version confirms the original committed edit');
   assert.equal(pages.hasUnresolvedWrite(), false);
   assert.equal(commandCalls().length, beforeUnconfirmed + 1);
-  assert.ok(calls.some(call => call.endpoint === '/catalogue-settings-read/colors/query' && call.body.search === '999' && call.body.page === 3));
+  assert.ok(calls.some(call => call.endpoint === '/catalogue-settings-read/colors/query' && call.body.search === '999' && call.body.page === 2));
   await click(button('编辑')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC TARGET CANCELLED READ');
   const cancelledTargetBefore = structuredClone(colors.find(row => row.code === '999')); assert.ok(cancelledTargetBefore);
   readbackMode = 'late'; const beforeCancelledWrite = commandCalls().length, previousCancelledKeys = new Set(commandCalls().map(call => call.body.requestKey));
@@ -288,19 +288,20 @@ try {
   await act(async () => { current.dispose(); scope.dispose(); pages.dispose(); }); current = null;
   role = 'ADMIN'; authVersion++; await act(async () => session.auth.resolveSession());
   pages = factory({ colors: true, fits: true }); await enter('product-settings'); await click(button('版型'));
-  fits.length = 0; fits.push(...Array.from({ length: 21 }, (_, i) => ({ id: sid(400 + i), code: String.fromCharCode(65 + i), name: 'SYNTHETIC Z MATCH', enabled: true, version: 1 })));
-  await click(button('新增版型')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC Z TARGET'); await type(document.querySelector('#pc-dict-code input'), 'Z');
+  // Prior stored rows provide search collisions. The new FIT must use a legal create code.
+  fits.length = 0; fits.push(...Array.from({ length: 21 }, (_, i) => ({ id: sid(400 + i), code: String.fromCharCode(65 + i), name: 'SYNTHETIC 9 MATCH', enabled: true, version: 1 })));
+  await click(button('新增版型')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC 9 TARGET'); await type(document.querySelector('#pc-dict-code input'), '9');
   const beforeFit = commandCalls().length; await click(button('确定'));
   assert.ok(!document.querySelector('#pc-dict-form')); assert.equal(commandCalls().length, beforeFit + 1);
   assert.equal(commandCalls().at(-1).body.action, 'CREATE');
-  assert.ok(calls.some(call => call.endpoint === '/catalogue-settings-read/fits/query' && call.body.search === 'Z' && call.body.page === 2));
+  assert.ok(calls.filter(call => call.endpoint === '/catalogue-settings-read/fits/query' && call.body.search === '9' && call.body.pageSize === 100).length === 1);
   await click(button('颜色')); await click(button('新增颜色')); await type(document.querySelector('#pc-dict-name input'), 'SYNTHETIC DENIED READ'); await type(document.querySelector('#pc-dict-code input'), '999');
   readbackMode = 'forbidden'; const beforeDenied = commandCalls().length; await click(button('确定'));
   assert.equal(scope.active, false); assert.equal(host.childElementCount, 0);
   assert.equal(commandCalls().length, beforeDenied + 1);
   assert.equal(receipts.get(commandCalls().at(-1).body.requestKey).status, 'COMMITTED', 'permission loss does not alter the original committed receipt');
-  assert.ok(calls.every(call => !call.endpoint.startsWith('/catalogue-settings-read/') || !call.body.pageSize || call.body.pageSize === 20), 'verification uses existing bounded page size');
-  console.log('PASS normal catalogue route: existing receipt/re-entry/DELETE checks; F03 COLOR second/last page and FIT second page exact ID/version; duplicate/total drift/wrong page/stale version/wrong ID/network/timeout retain committed owner, read-only retry, unmount/late result and permission-loss cancellation. Finite synthetic HTTP only; no real PG/deployment claim.');
+  assert.ok(calls.every(call => !call.endpoint.startsWith('/catalogue-settings-read/') || !call.body.pageSize || [20, 100].includes(call.body.pageSize)), 'verification uses existing bounded page size');
+  console.log('PASS normal catalogue route: existing receipt/re-entry/DELETE checks; F03 COLOR second/last page and FIT single request exact ID/version; duplicate/total drift/wrong page/stale version/wrong ID/network/timeout retain committed owner, read-only retry, unmount/late result and permission-loss cancellation. Finite synthetic HTTP only; no real PG/deployment claim.');
 } finally {
   if (fixtureSync) console.log('NORMAL_ENTRY_CAUSAL_FIXTURE_DIAGNOSTIC ' + JSON.stringify(fixtureSync.diagnostics()));
   await act(async () => { current?.dispose(); scope?.dispose(); pages?.dispose(); session?.dispose(); }); dom.window.close(); await rm(temp, { recursive: true, force: true });

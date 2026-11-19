@@ -12,7 +12,7 @@ import { reserveRuntimeDocumentNumber, assertRuntimeDocumentNumber } from "./run
 import type { RuntimeDocumentNumberInput } from "../../../packages/application/src/runtime-document-number.ts";
 import { checkedNativeSalesFactInput, PostgresNativeSalesFacts } from "./sales-native-facts.ts";
 import type { NativeCatalogueCompletenessVerifier, NativeSalesHistoricalCustomers } from "./sales-native-facts.ts";
-import type { NativeSalesReferenceFacts } from "../../../packages/application/src/sales-native-facts.ts";
+import type { NativeSalesReferenceFacts, NativeSalesReferenceMode } from "../../../packages/application/src/sales-native-facts.ts";
 import { PostgresPostingBalances } from "./inventory-posting-balances.ts";
 import type { Pool } from "pg";
 import type { OperationReceiptRow, SalesAuditRow, SalesCurrentIdentity, SalesResult, SalesTransaction, SalesUnitOfWork, StoredSales } from "../../../packages/application/src/ports.ts";
@@ -180,7 +180,7 @@ class PostgresSalesTransaction implements SalesTransaction {
   private active = true;
   private retainedApprovalGeneration = 0;
   private sales: { readonly id: EntityId<"sales">; readonly version: Version | null; readonly stockBasis: StoredSales["stockBasis"];
-    readonly creation?: Pick<SalesHeaderRow, "createdByAccountId" | "createdByStaffId" | "createdHallId" | "createdAt"> } | undefined;
+    readonly historicalReferences?: Pick<SalesHeaderRow, "hallId" | "warehouseId">; readonly creation?: Pick<SalesHeaderRow, "createdByAccountId" | "createdByStaffId" | "createdHallId" | "createdAt"> } | undefined;
   private balancesLocked = false;
   private anchorRead = false;
   private anchor: DocumentInventoryAnchor | undefined;
@@ -276,16 +276,22 @@ class PostgresSalesTransaction implements SalesTransaction {
     await assertRuntimeDocumentNumber((sql, values) => this.query(sql, values), input);
     this.assertNumberScope(input);
   }
-  async getCurrentSalesReferenceFacts(input: SalesDraft | SalesDocument): Promise<NativeSalesReferenceFacts> {
+  async getCurrentSalesReferenceFacts(input: SalesDraft | SalesDocument, mode?: NativeSalesReferenceMode): Promise<NativeSalesReferenceFacts> {
     const check = (salesId: EntityId<"sales">): void => requireDomain(this.active && !this.specificationResolving && this.receiptActor !== undefined && this.sales?.id === salesId,
       "TRANSACTION_SCOPE", "Native facts require the original receipt actor and loaded sales target");
     check(input.header.id);
-    const { document, referenceKey } = checkedNativeSalesFactInput(input);
+    if (mode === "RETAIN_HISTORICAL_UNKNOWN_HALL_SAVE") {
+      const loaded = this.sales!;
+      requireDomain(loaded.stockBasis === "CUTOFF_HISTORY" && loaded.historicalReferences?.hallId === null
+        && input.header.hallId === null && input.header.warehouseId === loaded.historicalReferences.warehouseId,
+        "TRANSACTION_SCOPE", "Unknown hall facts require the exact locked historical hall and warehouse");
+    }
+    const { document, referenceKey } = checkedNativeSalesFactInput(input, mode);
     await this.getCurrentSalesIdentity(this.receiptActor!); check(document.header.id);
     if(this.standardCatalogue)await this.standardCatalogue.assertExistingSkus(document.lines.filter(line=>line.isCurrent).map(line=>line.skuId));
     const scope = this.referenceScopeKey(), key = JSON.stringify([scope, referenceKey]);
     if (this.factsCache?.key === key) return this.factsCache.value;
-    const value = await (this.specificationResolved ? this.specificationNativeFacts! : this.nativeFacts).load(document);
+    const value = await (this.specificationResolved ? this.specificationNativeFacts! : this.nativeFacts).load(document, mode);
     check(document.header.id);
     requireDomain(this.referenceScopeKey() === scope, "TRANSACTION_SCOPE", "Native facts changed during their original read");
     this.factsCache = { key, value }; return value;
@@ -365,6 +371,7 @@ class PostgresSalesTransaction implements SalesTransaction {
     const header = decodeHeader(row);
     const stockBasis = choice(row.stock_basis, ["RUNTIME_LEDGER", "CUTOFF_HISTORY"]);
     this.sales = { id: salesId, version: header.version, stockBasis,
+      ...(stockBasis === "CUTOFF_HISTORY" ? { historicalReferences: { hallId: header.hallId, warehouseId: header.warehouseId } } : {}),
       creation: { createdByAccountId: header.createdByAccountId, ...(header.createdByStaffId === undefined ? {} : { createdByStaffId: header.createdByStaffId }), createdHallId: header.createdHallId, createdAt: header.createdAt } };
     const lines = (await this.query(LINE_SELECT, [salesId])).rows.map(decodeLine);
     const settlements = (await this.query(SETTLEMENT_SELECT, [salesId])).rows.map(decodeSettlement);

@@ -20,12 +20,13 @@ type Row = Record<string, unknown>;
 interface Call { readonly sql: string; readonly values: unknown[] }
 class ScriptedPool implements PgInventoryQueryPool, PgInventoryQueryClient {
   readonly calls: Call[] = []; readonly releases: (Error | boolean | undefined)[] = []; connects = 0;
+  private outputOffset = 0;
   count = 1; scope: InventoryReadScope = inventoryScope; negative = "-2";
   publication: Row[] | undefined; guards = true;
   additionalSkus: string[] = []; newWarehouses = new Set<string>(); witnessSku: string | null = skuId(0, 0);
   nativeWitness: { id: string; created_operation_id: string } | null = null;
   flags: Row = { invalid_category_tree: false, missing_sizes: false, uncovered_sku: false, invalid_sku_size: false, invalid_balance: false };
-  transform: ((stage: string, rows: Row[]) => Row[]) | undefined;
+  transform: ((stage: string, rows: Row[], values?: unknown[]) => Row[]) | undefined;
   failAt: string | undefined; failRollback = false; afterQuery: ((stage: string) => void) | undefined;
   private admissionRows(warehouseIds: readonly string[], skuIds: readonly string[]): Row[] { return warehouseIds.map((warehouseId, i) => { const skuId = skuIds[i]!;
         return { warehouse_id: warehouseId, sku_id: skuId, admitted: true, published_batch_id: batchId,
@@ -63,10 +64,13 @@ class ScriptedPool implements PgInventoryQueryPool, PgInventoryQueryClient {
       case "keys": rows = this.admissionRows(values[0] as string[], values[1] as string[]); break;
       case "candidate-integrity": rows = [{ ...this.flags }]; break;
       case "catalog-status": rows = [{ ...this.flags, exact_total: String(this.count), quantity: sql.includes("'0'::text AS quantity") ? "0" : (BigInt(this.negative) * BigInt(this.count)).toString() }]; break;
+      case "output-cursor": this.outputOffset = 0; rows = []; break;
       case "products":
       case "output-products": {
-        const offset = stage === "products" ? Number(values[9]) : values[9] === null ? 0 : Number(String(values[9]).slice(-12)) - 1000 + 1;
-        const length = Math.min(Number(values[stage === "products" ? 8 : 10]), Math.max(0, this.count - offset));
+        const fetch = stage === "output-products" && sql.includes("FETCH");
+        const offset = stage === "products" ? Number(values[9]) : fetch ? this.outputOffset : 0;
+        const length = Math.min(fetch ? 100 : Number(values[8]), Math.max(0, this.count - offset));
+        if (fetch) this.outputOffset += length;
         rows = Array.from({ length }, (_, i) => ({ id: productId(offset + i), product_code: `NATIVE-${String(offset + i).padStart(6, "0")}`, name: "Synthetic native product",
           size_group_id: groupId, size_group_name: "Native source group", category_name: "Native category", supplier_name: null, season_name: null })); break;
       }
@@ -85,7 +89,7 @@ class ScriptedPool implements PgInventoryQueryPool, PgInventoryQueryClient {
       case "candidates": rows = Number(values[10]) === 0 ? [{ id: productId(0), label: "NATIVE-000000 Synthetic native product", code: "NATIVE-000000", name: "Synthetic native product", disabled: false, parent_label: null }] : []; break;
       default: assert.ok(["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "COMMIT", "ROLLBACK"].includes(stage), `Unexpected scripted statement: ${stage}`); rows = [];
     }
-    rows = this.transform?.(stage, rows) ?? rows; this.afterQuery?.(stage);
+    rows = this.transform?.(stage, rows, values) ?? rows; this.afterQuery?.(stage);
     return { rows, rowCount: rows.length };
   }
 }
@@ -209,15 +213,21 @@ test("inventory primary native keys: missing witness, unqualified or inconsisten
   const denied = nativeKeyPool(1, 1); await assert.rejects(new PostgresInventoryQueryReader(denied, null, { profile: "EXACT26", contract: "NATIVE_RUNTIME26_V1", async assertReady() { throw Error("HOST_DENIED"); } }).readInventory(read(denied)), /HOST_DENIED/); assert.deepEqual(stages(denied), ["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "ROLLBACK"]);
 });
 
-test("inventory full output PG: one RR snapshot, one full summary and bounded keyset batches produce the complete filter only after COMMIT", async () => {
+test("inventory full output PG: one RR snapshot, one full summary and bounded cursor batches produce the complete filter only after COMMIT", async () => {
   const pool = new ScriptedPool(); pool.count = 203; const reader = new PostgresInventoryQueryReader(pool), iterator = reader.readInventoryOutput(read(pool))[Symbol.asyncIterator]();
   assert.equal(pool.connects, 0); const first = await iterator.next(); assert.equal(first.value.kind, "summary"); assert.equal(stages(pool).includes("output-products"), false);
   const frames = [first.value]; for (;;) { const frame = await iterator.next(); if (frame.done) break; if (frame.value.kind === "complete") assert.equal(stages(pool).at(-1), "COMMIT"); frames.push(frame.value); }
   assert.equal(frames.filter(f => f.kind === "product").length, 203); const last = frames.at(-1)!; assert.equal(last.kind, "complete"); if (last.kind === "complete") { assert.equal(last.emittedProducts, 203); assert.equal(last.allMatchesTotal.knownQuantity, "-406"); }
   assert.equal(stages(pool).filter(s => s === "catalog-status").length, 1); assert.equal(stages(pool).filter(s => s === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY").length, 1); assert.deepEqual(pool.releases, [undefined]);
   const chunks = pool.calls.filter(c => c.sql.includes("inventory:output-products")); assert.equal(chunks.length, 3);
-  assert.deepEqual(chunks.map(c => c.values[10]), [100, 100, 100]); assert.equal(chunks[1]!.values[9], productId(99)); assert.equal(chunks[2]!.values[9], productId(199));
-  assert.ok(chunks.every(c => !c.sql.includes("OFFSET") && c.sql.includes('p.product_code COLLATE "C",p.id') && c.sql.includes("LIMIT $11")));
+  const cursor = pool.calls.filter(c => c.sql.includes("inventory:output-cursor")); assert.equal(cursor.length, 1);
+  assert.match(cursor[0]!.sql, /DECLARE inventory_output_products NO SCROLL CURSOR FOR/);
+  assert.match(cursor[0]!.sql, /ORDER BY p.product_code COLLATE "C",p.id/);
+  assert.equal(cursor[0]!.values.length, 8);
+  assert.ok(chunks.every(c => c.sql.includes("FETCH FORWARD 100 FROM inventory_output_products") && c.values.length === 0));
+  const one = new ScriptedPool(); for await (const _ of new PostgresInventoryQueryReader(one).readInventoryOutput(read(one))) { /* consume */ }
+  assert.equal(stages(one).includes("output-cursor"), false);
+  assert.match(one.calls.find(c => c.sql.includes("inventory:output-products"))!.sql, /LIMIT \$9/);
   const empty = new ScriptedPool(); empty.count = 0; const kinds = []; for await (const frame of new PostgresInventoryQueryReader(empty).readInventoryOutput(read(empty))) kinds.push(frame.kind);
   assert.deepEqual(kinds, ["summary", "complete"]); assert.equal(stages(empty).includes("output-products"), false); assert.equal(stages(empty).at(-1), "COMMIT");
 });
@@ -775,7 +785,7 @@ test("retained active missing/deleted/deep parent remains an integrity rejection
 });
 
 test('SCRIPTED current 27 inventory keeps missing balance unknown and existing zero exact without reading source rows', async () => {
- const pool = new ScriptedPool(); pool.transform = (stage, rows) => stage === 'publication' ? [{id:batchId,ready:true}] : stage === 'catalog-status' ? rows.map(r => ({...r,unknown_count:'1'})) : rows;
+ const pool = new ScriptedPool(); pool.transform = (stage, rows) => stage === 'publication' ? [{id:batchId,ready:true}] : stage === 'catalog-status' ? rows.map(r => ({...r,quantity:'0',unknown_count:'0'})) : rows;
  const runtime = {profile:'EXACT27' as const,contract:'UNIFIED_ORDINARY_RUNTIME27_V1' as const,async assertReady(client:object,purpose:'ORDINARY_DOCUMENT_READ'){assert.equal(client,pool);assert.equal(purpose,'ORDINARY_DOCUMENT_READ');}};
  const result = await new PostgresInventoryQueryReader(pool,null,undefined,null,runtime).readInventory(read(pool));
  const cells = result.data.products[0]!.colorFits[0]!.rows[0]!.cells;
@@ -809,7 +819,7 @@ test('SCRIPTED current 27 inventory rejects invalid readiness and contradictory 
 
 test('SCRIPTED current 27 carries unknown counts across authorized warehouses while preserving known negative and zero', async()=>{
  const pool=new ScriptedPool(); pool.scope={hallIds:inventoryScope.hallIds,warehouses:[...inventoryScope.warehouses,{id:inventoryId('warehouse',4),hallId:inventoryScope.hallIds[0]!,label:'SYNTHETIC SECOND'}]};
- pool.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,unknown_count:'4'})):rows;
+ pool.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,quantity:'0',unknown_count:'0'})):rows;
  const runtime={profile:'EXACT27' as const,contract:'UNIFIED_ORDINARY_RUNTIME27_V1' as const,async assertReady(){}};
  const result=await new PostgresInventoryQueryReader(pool,null,undefined,null,runtime).readInventory(read(pool));
  const group=result.data.products[0]!.colorFits[0]!;
@@ -823,7 +833,7 @@ test('SCRIPTED end-to-end V27 unknown passes backend DTO, web response, stream, 
  const {inventoryResponse}=await import('../apps/web/src/transport/response-validation.ts');
  const {emptyInventoryFilter}=await import('../apps/web/src/inventory/contracts.ts');
  const {createInventoryOutputReader,inventoryWorkbookRows,createInventoryPrintHtml}=await import('../apps/web/src/inventory/output-adapter.ts');
- const pool=new ScriptedPool();pool.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,unknown_count:'1'})):rows;
+ const pool=new ScriptedPool();pool.transform=(stage,rows,values)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,quantity:values?.length===9?'0':r.quantity,unknown_count:values?.length===9?'0':'1'})):rows;
  const runtime={profile:'EXACT27' as const,contract:'UNIFIED_ORDINARY_RUNTIME27_V1' as const,async assertReady(){}};
  const reader=new PostgresInventoryQueryReader(pool,null,undefined,null,runtime), filter=emptyInventoryFilter();
  const page=await reader.readInventory(read(pool));const web=inventoryResponse(page.data,{filter,page:1,pageSize:100});
@@ -839,7 +849,48 @@ test('SCRIPTED end-to-end V27 unknown passes backend DTO, web response, stream, 
 });
 
 test('SCRIPTED V27 exact sparse-zero proof feeds page and all-filter totals without broad dimension admission',async()=>{
- const pool=new ScriptedPool();pool.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,unknown_count:'0'})):stage==='balances'?rows.map(r=>r.balance_present?r:{...r,zero_proof_state:'EXPLICIT_ZERO'}):rows;
+ const pool=new ScriptedPool();pool.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,quantity:'0',unknown_count:'0'})):stage==='balances'?rows.map(r=>r.balance_present?r:{...r,zero_proof_state:'EXPLICIT_ZERO'}):rows;
  const runtime={profile:'EXACT27' as const,contract:'UNIFIED_ORDINARY_RUNTIME27_V1' as const,async assertReady(){}};const result=await new PostgresInventoryQueryReader(pool,null,undefined,null,runtime).readInventory(read(pool));assert.deepEqual(result.data.products[0]!.colorFits[0]!.rows[0]!.cells[sizes[2]!.id],{state:'known',skuId:skuId(0,2),quantity:'0'});assert.deepEqual(result.data.allMatchesTotal,{knownQuantity:'-2',unknownCells:0,completeness:'complete'});for(const c of pool.calls.filter(c=>/inventory:catalog-status|inventory:balances/.test(c.sql))){assert.match(c.sql,/standard_inventory_key_proof\(w.id,s.id\)/);assert.doesNotMatch(c.sql,/inventory_key_admission/);}
  for(const fault of ['NONZERO','BROKEN','ledger']){const bad=new ScriptedPool();bad.transform=(stage,rows)=>stage==='publication'?[{id:batchId,ready:true}]:stage==='catalog-status'?rows.map(r=>({...r,unknown_count:'1'})):stage==='balances'?rows.map(r=>r.balance_present?r:{...r,zero_proof_state:fault==='ledger'?'EXPLICIT_ZERO':fault,ledger_present:fault==='ledger'}):rows;await assert.rejects(new PostgresInventoryQueryReader(bad,null,undefined,null,runtime).readInventory(read(bad)),code('INVENTORY_INTEGRITY_FAILED'));assert.equal(stages(bad).at(-1),'ROLLBACK');}
+});
+
+test("EXACT27 page and remainder form a disjoint complete stock proof in one snapshot", async()=>{
+ const pool=new ScriptedPool(); pool.count=101;
+ pool.transform=(stage,rows)=>stage==="publication"?[{id:batchId,ready:true}]:stage==="catalog-status"?
+   rows.map(r=>({...r,quantity:"-2",unknown_count:"1"})):rows;
+ const runtime={profile:"EXACT27" as const,contract:"UNIFIED_ORDINARY_RUNTIME27_V1" as const,async assertReady(){}};
+ const reader=new PostgresInventoryQueryReader(pool,null,undefined,null,runtime);
+ const result=await reader.readInventory(read(pool));assert.equal(result.data.products.length,100);
+ assert.deepEqual(result.data.allMatchesTotal,{knownQuantity:"-202",unknownCells:101,completeness:"incomplete"});
+ const page=pool.calls.find(c=>c.sql.includes("inventory:balances"))!;
+ const rest=pool.calls.find(c=>c.sql.includes("inventory:catalog-status"))!;
+ assert.ok(pool.calls.indexOf(page)<pool.calls.indexOf(rest));
+ assert.match(rest.sql,/WHERE NOT \(s.id = ANY\(\$9::uuid\[\]\)\)/);
+ assert.deepEqual(rest.values[8],page.values[2]);
+ assert.equal((page.values[2] as unknown[]).length,300);
+ for(const fault of ["missing","repeated"]) {
+  const bad=new ScriptedPool();
+  bad.transform=(stage,rows)=>stage==="publication"?[{id:batchId,ready:true}]:
+    stage==="balances"?(fault==="missing"?rows.slice(1):[rows.at(-1)!,...rows.slice(1)]):rows;
+  await assert.rejects(readerFor(bad).readInventory(read(bad)),code("INVENTORY_INTEGRITY_FAILED"),fault);
+  assert.equal(stages(bad).at(-1),"ROLLBACK");
+ }
+ function readerFor(p: ScriptedPool){return new PostgresInventoryQueryReader(p,null,undefined,null,runtime);}
+});
+
+test("EXACT27 valid page cannot hide invalid off-page stock evidence", async () => {
+  const pool = new ScriptedPool();
+  pool.count = 101;
+  pool.transform = (stage, rows) => stage === "publication" ? [{ id: batchId, ready: true }] :
+    stage === "catalog-status" ? rows.map(row => ({ ...row, invalid_balance: true })) : rows;
+  const runtime = { profile: "EXACT27" as const, contract: "UNIFIED_ORDINARY_RUNTIME27_V1" as const, async assertReady() {} };
+  const reader = new PostgresInventoryQueryReader(pool, null, undefined, null, runtime);
+  await assert.rejects(reader.readInventory(read(pool)), code("INVENTORY_INTEGRITY_FAILED"));
+  const page = pool.calls.find(call => call.sql.includes("inventory:balances"))!;
+  const remainder = pool.calls.find(call => call.sql.includes("inventory:catalog-status"))!;
+  assert.ok(pool.calls.indexOf(page) < pool.calls.indexOf(remainder));
+  assert.match(remainder.sql, /WHERE NOT \(s.id = ANY\(\$9::uuid\[\]\)\)/);
+  assert.deepEqual(remainder.values[8], page.values[2]);
+  assert.equal(stages(pool).includes("COMMIT"), false);
+  assert.equal(stages(pool).at(-1), "ROLLBACK");
 });

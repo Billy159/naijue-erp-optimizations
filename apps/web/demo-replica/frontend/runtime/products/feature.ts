@@ -35,7 +35,7 @@ export function createProductsFeature(options:ReadyPageOptions,navigate:Navigate
     if (route === 'products' && config.products) {
       const module = await import('./index.tsx');
       if (!scope.active) return { dispose: () => {}, canLeave: () => true };
-      return { dispose: module.mountProductList(host, { scope, http, onAccessFailure: session.onAccessFailure, openEditor: id => navigate(id === null ? 'products/new' : 'products/edit/' + encodeURIComponent(id)) }), canLeave: () => true };
+      return { dispose: module.mountProductList(host, { scope, http, ...(options.notify?{notify:options.notify}:{}), onAccessFailure: session.onAccessFailure, openEditor: id => navigate(id === null ? 'products/new' : 'products/edit/' + encodeURIComponent(id)) }), canLeave: () => true };
     }
     if ((route === 'products/new' || route.startsWith('products/edit/')) && config.products) {
       if (!prepareRoute) throw new Error('商品编辑样式加载尚未接入。');

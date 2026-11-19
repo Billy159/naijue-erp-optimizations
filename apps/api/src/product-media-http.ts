@@ -110,8 +110,16 @@ export function createProductMediaHttpPlugin(options: ProductMediaHttpOptions): 
       if (options.provider === null) throw new DomainError("PRODUCT_MEDIA_NOT_READY", "Controlled media provider unavailable");
       const controller = new AbortController(), abort = () => controller.abort(), close = () => { if (!reply.raw.writableFinished) controller.abort(); };
       request.raw.once("aborted", abort); reply.raw.once("close", close);
+      // Authentication and upstream hooks can yield before the route installs
+      // these listeners. A past close event must not start a private file read.
+      const requireConnected = () => {
+        if (request.raw.aborted || reply.raw.destroyed || reply.raw.socket?.destroyed) controller.abort();
+        if (controller.signal.aborted) throw new DomainError("PRODUCT_READ_ABORTED", "Media request ended");
+      };
       try {
+        requireConnected();
         const result = await options.provider.deliver({ actor, productId, imageId, revision, variant, signal: controller.signal });
+        requireConnected();
         if (!Buffer.isBuffer(result.bytes) || result.bytes.length < 1 || result.bytes.length > 8388608 || !["image/png", "image/jpeg", "image/webp"].includes(result.mime)) throw Error("Invalid controlled media bytes");
         return reply.type(result.mime).send(result.bytes);
       } finally { request.raw.off("aborted", abort); reply.raw.off("close", close); }

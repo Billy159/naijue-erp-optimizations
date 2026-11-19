@@ -1,12 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile, symlink, realpath } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, symlink, realpath, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packRelease } from './pack.mjs';
-import { sha256, validateRelease, allowedMember } from './manifest.mjs';
+import { sha256, validateRelease, allowedMember, sameSet } from './manifest.mjs';
+
+test('manifest member parity ignores order without ignoring exact names or duplicate counts', () => {
+  const members = ['a/0', 'a/_', 'a/0', 'A/0'];
+  const reversed = [...members].reverse();
+  assert.equal(sameSet(members, reversed), true);
+  assert.deepEqual(members, ['a/0', 'a/_', 'a/0', 'A/0']);
+  assert.deepEqual(reversed, ['A/0', 'a/0', 'a/_', 'a/0']);
+  assert.equal(sameSet(members, ['a/0', 'a/_', 'A/0', 'A/0']), false);
+  assert.equal(sameSet(members, members.slice(1)), false);
+  assert.equal(sameSet([], []), true);
+});
 
 const configured = process.env.PACK_TEST_ROOT;
 const testParent = configured ? path.resolve(configured) : await realpath(os.tmpdir());
@@ -161,6 +172,7 @@ test('tiny tool fixture packs, extracts once, verifies members and refuses overw
   assert.equal(result.status, 'PACKED_AND_EXTRACTED_READBACK_MATCH'); assert.equal(result.archiveExtractions, 1);
   assert.equal(result.businessOrProductionValidation, false); assert.equal(result.deploymentExecuted, false);
   const bytes = await readFile(path.join(f.options.out, 'release.tar.gz')); assert.equal(sha256(bytes), result.archive.sha256);
+  assert.equal(result.archive.bytes, bytes.length);
   const manifest = JSON.parse(await readFile(path.join(f.options.out, 'release-manifest.json')));
   assert.equal(manifest.sourceCommit, sourceCommit); assert.equal(manifest.members.length, 6);
   assert(!manifest.members.some(row => row.path.includes('evidence')));
@@ -377,4 +389,38 @@ test('release graph uses the shared exact entry instead of accepting another pro
  const g=await fixture('shared-entry-output');
  g.build.components.backend.entryOutput='backend/production-alternate.js';
  await g.save(); await rejects(g,'PRODUCTION_ENTRY_OUTPUT_REQUIRED');
+});
+
+test('exclusive output failure removes the new tree and leaves an existing tree untouched', { skip: process.platform !== 'linux' }, async () => {
+  const f = await fixture('failure-retry');
+  // On Linux mkdir can create out just below PATH_MAX while creating .packing
+  // inside it fails. No global fault injection or environment race is needed.
+  let parent = f.root;
+  while (Buffer.byteLength(parent) < 3900) {
+    const n = Math.min(200, Math.max(1, 3899 - Buffer.byteLength(parent)));
+    parent = path.join(parent, 'p'.repeat(n));
+    await mkdir(parent);
+  }
+  const out = path.join(parent, 'x'.repeat(4089 - Buffer.byteLength(parent) - 1));
+  await assert.rejects(packRelease({ ...f.options, out }), { code: 'ENAMETOOLONG' });
+  await assert.rejects(lstat(out), { code: 'ENOENT' });
+  await assert.rejects(packRelease({ ...f.options, out }), { code: 'ENAMETOOLONG' }); // not blocked by stale output
+  await assert.rejects(lstat(out), { code: 'ENOENT' });
+
+  await mkdir(f.options.out);
+  const preExisting = path.join(f.options.out, 'keep.txt');
+  await writeFile(preExisting, 'unchanged');
+  await rejects(f, 'OUTPUT_EXISTS_NO_OVERWRITE');
+  assert.equal(await readFile(preExisting, 'utf8'), 'unchanged');
+});
+
+test('competing pack invocations cannot clean the exact output the other invoker won', async () => {
+  const f = await fixture('competing-packs');
+  const results = await Promise.allSettled([packRelease(f.options), packRelease(f.options)]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  const loser = results.find(result => result.status === 'rejected');
+  assert.ok(['EEXIST', 'OUTPUT_EXISTS_NO_OVERWRITE'].includes(loser.reason.code));
+  const receipt = JSON.parse(await readFile(path.join(f.options.out, 'pack-receipt.json'), 'utf8'));
+  assert.equal(receipt.archive.sha256, sha256(await readFile(path.join(f.options.out, 'release.tar.gz'))));
+  for (const transient of ['.packing', '.readback']) await assert.rejects(lstat(path.join(f.options.out, transient)), { code: 'ENOENT' });
 });

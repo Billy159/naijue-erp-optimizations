@@ -199,7 +199,11 @@ export async function walkFiles(root) {
   }
   await walk(root, ''); return files;
 }
-const sameSet = (left, right) => left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
+export function sameSet(left, right) {
+  if (left.length !== right.length) return false;
+  const sortedRight = [...right].sort();
+  return [...left].sort().every((value, index) => value === sortedRight[index]);
+}
 function checkIdentity(source, build) {
   requireRelease(source.format === 'naijue-release-source-v1' && build.format === 'naijue-release-build-v1', 'MANIFEST_FORMAT_REQUIRED');
   requireRelease(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(source.buildId ?? '') && /^[a-f0-9]{40}$/.test(source.sourceCommit ?? ''), 'EXACT_BUILD_IDENTITY_REQUIRED');

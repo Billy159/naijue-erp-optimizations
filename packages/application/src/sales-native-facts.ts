@@ -4,13 +4,15 @@ import { requireDomain } from "../../domain/src/errors.ts";
 import { negateQuantity } from "../../domain/src/values.ts";
 import type { EntityId } from "../../domain/src/values.ts";
 import type { SalesBusinessRules, SalesTransaction } from "./ports.ts";
-import { sameSalesSettlementFacts } from "./sales-change-evidence.ts";
+import { sameSalesLine, sameSalesSettlement, sameSalesSettlementFacts } from "./sales-change-evidence.ts";
 import { createCandidateSalesBusinessRules } from "./sales-business-rules.ts";
 import type { ProductSalesPricingFacts, SalesRuleFactResolver } from "./sales-business-rules.ts";
 
 /** Bounded request-local facts, not a form proposal or a cross-request authorization cache. */
 export const SALES_NATIVE_FACT_MAX_LINES = 2000;
 export const SALES_NATIVE_FACT_QUERY_BATCH_SIZE = 200;
+/** Internal transaction mode, not caller data or a grant. SAVE rules require sealed proof before using it. */
+export type NativeSalesReferenceMode = "RETAIN_HISTORICAL_UNKNOWN_HALL_SAVE";
 export interface NativeSalesReferenceFacts {
   readonly salesId: EntityId<"sales">;
   readonly hall: { readonly id: EntityId<"hall">; readonly enabled: boolean } | null;
@@ -65,18 +67,18 @@ function resolver(document: SalesDraft | SalesDocument, facts: NativeSalesRefere
     }
   };
 }
-async function facts(tx: SalesTransaction | undefined, document: SalesDraft | SalesDocument): Promise<NativeSalesReferenceFacts> {
+async function facts(tx: SalesTransaction | undefined, document: SalesDraft | SalesDocument, mode?: NativeSalesReferenceMode): Promise<NativeSalesReferenceFacts> {
   requireDomain(tx && typeof tx.getCurrentSalesReferenceFacts === "function", "NATIVE_CATALOGUE_FACTS_UNAVAILABLE",
     "Native sales rules require complete trusted facts from the original command transaction");
-  return tx.getCurrentSalesReferenceFacts(document);
+  return tx.getCurrentSalesReferenceFacts(document, mode);
 }
 /** A stored cutoff tag alone cannot certify an exceptional hall relationship.
  * The existing same-client sealed migration reader binds original source facts.
  * Permission remains a separate mandatory check against the sales hall itself. */
-async function historicalHallProof(previous:SalesDocument|undefined, proposed:SalesDraft|SalesDocument, current:NativeSalesReferenceFacts,
+async function historicalHallProof(previous:SalesDocument|undefined, proposed:SalesDraft|SalesDocument, current:NativeSalesReferenceFacts | undefined,
   tx:SalesTransaction|undefined, stockBasis:'CUTOFF_HISTORY'|'RUNTIME_LEDGER'|undefined):Promise<(()=>void)|undefined> {
   const h=proposed.header;
-  if(h.hallId!==null&&h.hallId===current.warehouse.hallId)return undefined;
+  if(h.hallId!==null&&h.hallId===current?.warehouse.hallId)return undefined;
   if(stockBasis!=='CUTOFF_HISTORY'||!previous||h.hallId!==previous.header.hallId||h.warehouseId!==previous.header.warehouseId)return undefined;
   requireDomain(tx?.getRetainedSalesApprovalHistory,'HISTORICAL_HALL_PROVENANCE_REQUIRED','Exceptional historical hall requires the original transaction migration evidence');
   const history=await tx.getRetainedSalesApprovalHistory(previous.header.id,previous.header.version,true);
@@ -90,6 +92,28 @@ async function historicalHallProof(previous:SalesDocument|undefined, proposed:Sa
 export function createNativeTransactionSalesBusinessRules(): SalesBusinessRules {
   return Object.freeze<SalesBusinessRules>({
     async assertDraftChange(previous, draft, tx, stockBasis) {
+      // A NULL hall is not a current reference. Only the exact locked historical
+      // draft may retain it, with its original rows/economics and sealed source.
+      if (draft.header.hallId === null) {
+        const h = draft.header, old = previous?.header;
+        const lockedFields = ["id", "number", "businessType", "hallId", "warehouseId", "customerId", "salespersonId", "grossAmount", "orderDiscount", "netDue"] as const;
+        requireDomain(stockBasis === "CUTOFF_HISTORY" && previous && old?.status === "DRAFT"
+          && lockedFields.every(field => h[field] === old[field])
+          && (h.responsibleStaffId === undefined || h.responsibleStaffId === old.responsibleStaffId),
+          "SALES_REFERENCE_UNAVAILABLE", "An unknown historical sales hall permits only an unchanged reference set and metadata edits");
+        const oldLines = new Map(previous.lines.filter(line => line.isCurrent).map(line => [line.id, line]));
+        const oldSettlements = new Map(previous.settlements.map(row => [row.id, row]));
+        requireDomain(draft.lines.length === oldLines.size && draft.lines.every(line => {
+          const prior = oldLines.get(line.id); return prior !== undefined && sameSalesLine(prior, line) && oldLines.delete(line.id);
+        }) && draft.settlements.length === oldSettlements.size && draft.settlements.every(row => {
+          const prior = oldSettlements.get(row.id); return prior !== undefined && sameSalesSettlement(prior, row) && oldSettlements.delete(row.id);
+        }), "SALES_REFERENCE_UNAVAILABLE", "Unknown historical hall requires exact retained lines and settlements");
+        const hallProof = await historicalHallProof(previous, draft, undefined, tx, stockBasis);
+        requireDomain(hallProof, "HISTORICAL_HALL_PROVENANCE_REQUIRED", "A retained unknown hall needs an exact sealed migration origin");
+        const current = await facts(tx, draft, "RETAIN_HISTORICAL_UNKNOWN_HALL_SAVE");
+        await createCandidateSalesBusinessRules(resolver(draft, current, previous, tx, hallProof)).assertDraftChange(previous, draft, tx, stockBasis);
+        return;
+      }
       const current = await facts(tx, draft);
       // New/changed selection requires an actual staff reference; untouched
       // unknown originals survive a common ordinary metadata edit.

@@ -435,6 +435,44 @@ test('H06 drain uses configured 120s output budget, completes beyond30s or repor
   await checked;assert.equal(destroyed,expires?1:0);assert.equal(p.closed(),1);t.mock.timers.reset();
  }}finally{t.mock.timers.reset();http.createServer=original;syncBuiltinESMExports();await rm(root,{recursive:true,force:true});}
 });
+test('H06 shutdown schedules the full large drain without exceeding the Node timer limit', async t => {
+  const root = await build(), p = apiDouble(), original = http.createServer;
+  const server = new EventEmitter() as EventEmitter & { listen(): void; close(cb: () => void): void };
+  server.listen = () => queueMicrotask(() => server.emit('listening'));
+  server.close = () => {};
+  http.createServer = (() => server) as unknown as typeof http.createServer;
+  syncBuiltinESMExports();
+  const callbacks: (() => void)[] = [], intervals: number[] = [];
+  try {
+    const base = config(root), limit = 2_147_483_647;
+    const configuration = { ...base, postgres: { ...base.postgres, queryTimeoutMillis: limit } };
+    const host = await startProductionApplicationHost({ api: p.api, configuration });
+    let destroyed = 0;
+    const socket = Object.assign(new EventEmitter(), { destroy: () => { destroyed++; } });
+    server.emit('connection', socket);
+    t.mock.method(globalThis, 'setTimeout', (callback: () => void, interval: number) => {
+      callbacks.push(callback);
+      intervals.push(interval);
+      return { unref() {} };
+    });
+    t.mock.method(globalThis, 'clearTimeout', () => {});
+    const closing = assert.rejects(host.close(), { name: 'AggregateError' });
+    assert.deepEqual(intervals, [limit]);
+    callbacks.shift()!();
+    assert.deepEqual(intervals, [limit, 2_000]);
+    assert.equal(destroyed, 0);
+    assert.equal(p.closed(), 0);
+    callbacks.shift()!();
+    await closing;
+    assert.equal(destroyed, 1);
+    assert.equal(p.closed(), 1);
+  } finally {
+    t.mock.restoreAll();
+    http.createServer = original;
+    syncBuiltinESMExports();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test('H06 detached readiness response never writes after late probe completion',async()=>{
  const root=await build(),p=apiDouble();let complete!:(v:boolean)=>void,writes=0;
  try{const api={...p.api,readiness:()=>new Promise<boolean>(resolve=>{complete=resolve;})};

@@ -12,7 +12,7 @@ import {createNormalListReader,createOrdinaryListReader,documentRowKey,type Norm
 import type {HistoryTarget} from './history-reader.ts';
 import type {HistoryRevisionOwner} from './history-revision.ts';
 import type {ReadScope} from '../../../../src/loading/read-scope.ts';
-import {OrdinaryListTotals} from './ordinary-list-totals.ts';
+import {OrdinaryListTotals, ordinaryFilterKey} from './ordinary-list-totals.ts';
 import type {TransferListQuery} from '../../../../src/transfers/contracts.ts';
 import type {ReplicaSession} from '../common/session.ts';
 /** Original native model/command owners. Normal union reads have their own exact26 decoder. */
@@ -24,7 +24,7 @@ export function createReplicaTransferSession(runtime:ReplicaSession,options:{doc
  const totals=new OrdinaryListTotals({scope,execute:ordinaryReader.readTransferTotals});
  const list=new LatestQuery<TransferListQuery,NormalTransferPage|OrdinaryTransferPage>({scope,execute:read=>ordinary?ordinaryReader.readTransfers(read):normal.readTransfers(read)}),categoryDetails=new LatestQuery({scope,execute:normal.readTransferCategories});
  let acceptedSequence=0,filterKey:string|null=null,needsListRefresh=false;
- const stopList=list.subscribe(()=>{if(!ordinary)return;const state=list.getSnapshot();if(state.phase==='loading'){const next=JSON.stringify(state.request?.parameters.filter);if(filterKey!==null&&next!==filterKey)totals.invalidate();filterKey=next;}if(state.phase==='success'&&state.success&&state.success.sequence!==acceptedSequence&&'readRevision' in state.success.data){acceptedSequence=state.success.sequence;needsListRefresh=false;void totals.load(state.success.parameters.filter,state.success.data.readRevision);}});
+ const stopList=list.subscribe(()=>{if(!ordinary)return;const state=list.getSnapshot();if(state.phase==='loading'){const next=ordinaryFilterKey(state.request?.parameters.filter);if(filterKey!==null&&next!==filterKey)totals.invalidate();filterKey=next;}if(state.phase==='success'&&state.success&&state.success.sequence!==acceptedSequence&&'readRevision' in state.success.data){acceptedSequence=state.success.sequence;needsListRefresh=false;void totals.load(state.success.parameters.filter,state.success.data.readRevision);}});
  const responsibleStaff=options.responsibleStaff??(options.responsibleReady===true?createResponsibleCapability(runtime,scope):undefined);
  const workspace=new TransferCommandWorkspace({scope,reader,...(ordinary?{documentListProfile:options.documentListProfile}:{}),client:createTransferCommandHttpClient(runtime.http),newRequestKey:options.newRequestKey,onAccessFailure:runtime.onAccessFailure,existingPreparation:createTransferExistingPreparationHttpClient(runtime.http),existingReader:current,...(responsibleStaff?{responsibleStaff}:{})});
  let committedOperation:string|null=null;

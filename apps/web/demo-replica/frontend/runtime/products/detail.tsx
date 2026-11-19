@@ -89,5 +89,20 @@ function Barcodes(p:ProductDetailOptions&{active:boolean}){
 function SkuBarcodes(p:ProductDetailOptions&{skuId:string}){const initial:ProductBarcodeQuery={productId:entityId('product',p.product.id),skuId:p.skuId,page:1,pageSize:50};const {query,snapshot}=useProductRead<ProductBarcodeQuery,ProductBarcodeQueryResult|null>(p.scope,p.reader.barcodes?.read,initial,true,p.onAccessFailure);const result=snapshot.success?.data,data=result&&!('kind'in result)?result:null;return <SourceModal title="查看全部条码" close={p.close} footer={<button className="btn" onClick={p.close}>关闭</button>}><ReadNotice phase={snapshot.phase} retry={()=>void query.run(snapshot.request?.parameters??initial)} cancel={()=>query.cancel()}/>{data&&<><table><thead><tr>{['条码','类型','来源','历史规格','操作'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{data.items.map(row=><tr key={row.id}><td>{row.barcode}</td><td>{row.kind==='MAIN'?'主条码':'已确认旧条码'}{!row.enabled?'（停用）':''}</td><td>未记录</td><td>未记录</td><td/></tr>)}</tbody></table>{!data.items.length&&<div className="empty">当前规格无条码记录</div>}<DetailPager page={data.page} size={data.pageSize} total={data.total} disabled={snapshot.phase==='loading'} change={(page,pageSize)=>void query.run({productId:entityId('product',p.product.id),skuId:p.skuId,page,pageSize})}/></>}</SourceModal>;}
 export function SchemeConsumer(p:Pick<ProductDetailOptions,'scope'|'http'|'onAccessFailure'>&{schemeId:string;close:()=>void}){
  const host=useRef<HTMLDivElement>(null),latest=useRef(p);latest.current=p;
- useEffect(()=>{let active=true,release:(()=>void)|null=null;const child=new ReadScope(p.scope.identity,p.scope.routeInstanceId+':scheme:'+p.schemeId,p.schemeId,()=>{});const abort=()=>child.dispose();p.scope.signal.addEventListener('abort',abort,{once:true});void mountBarcodeSchemeDetail(host.current!,p.schemeId,{scope:child,http:p.http,onAccessFailure:kind=>latest.current.onAccessFailure(new HttpQueryError(kind,kind.toUpperCase()))},()=>latest.current.close()).then(dispose=>{if(active)release=dispose;else dispose();});return()=>{active=false;p.scope.signal.removeEventListener('abort',abort);queueMicrotask(()=>{child.dispose();release?.();});};},[p.scope,p.schemeId,p.http]);return <div ref={host}/>;
+ const [attempt,setAttempt]=useState(0),[failed,setFailed]=useState(false);
+ useEffect(()=>{
+  if(!p.scope.active)return;
+  let active=true,release:(()=>void)|null=null;
+  const child=new ReadScope(p.scope.identity,p.scope.routeInstanceId+':scheme:'+p.schemeId,p.schemeId,()=>{});
+  const abort=()=>child.dispose();
+  p.scope.signal.addEventListener('abort',abort,{once:true});
+  setFailed(false);
+  void mountBarcodeSchemeDetail(host.current!,p.schemeId,{scope:child,http:p.http,onAccessFailure:kind=>latest.current.onAccessFailure(new HttpQueryError(kind,kind.toUpperCase()))},()=>latest.current.close())
+   .then(dispose=>{if(active&&child.active)release=dispose;else dispose();})
+   .catch(()=>{if(active&&child.active&&p.scope.active)setFailed(true);});
+  return()=>{active=false;p.scope.signal.removeEventListener('abort',abort);queueMicrotask(()=>{child.dispose();release?.();});};
+ },[p.scope,p.schemeId,p.http,attempt]);
+ return <><div ref={host}/>{failed&&p.scope.active&&<SourceModal title="查看条码方案" close={p.close} footer={<><button className="btn" onClick={p.close}>关闭</button><button className="btn primary" onClick={()=>setAttempt(n=>n+1)}>重试</button></>}>
+  <p className="inline-error" role="alert">条码方案未能打开，请重试。如仍无法打开，可先关闭并保留当前操作。</p>
+ </SourceModal>}</>;
 }
