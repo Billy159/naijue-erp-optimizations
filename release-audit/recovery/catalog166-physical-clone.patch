@@ -1,0 +1,74 @@
+--- a/tools/unified-import/physical-clone-readback.mjs
++++ b/tools/unified-import/physical-clone-readback.mjs
+@@ -8,11 +8,13 @@
+ import {reconstructFresh35InstalledProductionTargetV2,describeFresh35CombinedTarget} from '../../scripts/release/unified-install/fresh35-combined-target-v1.mjs';
+ import {resolveFresh35ReferenceInputPaths,loadFresh35CompactZeroSource,assertFresh35CombinedSourcesCurrent} from '../../scripts/release/unified-install/fresh35-combined-source-v1.mjs';
+ import {buildFresh35CompactZeroCatalog,describeFresh35CombinedCatalog,assertFresh35CombinedCatalogCurrent,fresh35Admin154ControllerCatalogSql,validateFresh35CombinedRuntimeCatalogObservation,fresh35CombinedOrdinaryCatalogSql,validateFresh35CombinedOrdinaryCatalogObservation} from '../../scripts/release/unified-install/fresh35-combined-catalog-v1.mjs';
+-import {buildFresh35Ordinary161Catalog} from './fresh35-host-session.mjs';
++import {buildFresh35BatchedHostCatalog} from './fresh35-host-session.mjs';
+ import {reconcileWholePackage} from './whole-package-reconcile.mjs';
+ import {runtimeReadbackSql,validateProjection,compareWholePackageRuntimeProjection,ordinaryIdentitySql,runtimeReadIdentitySql} from './physical-clone-projection.mjs';
+ 
+-const model='626c560485431d38db4b83e1247475af2996a41e980bd7d1db3de9aa91116811';
++const installedCatalog=Object.freeze({"catalogSpecSha256":"97853a42224bcab2518965c8b47f785b23dc96d3cbc817c1bed0d901723f582a","modelSha256":"096a084e9d6fddd98277c56adc5688fa9a7fb179286e5e03fc7f6b54cbcedad8","sourceSetSha256":"4785eed1ad97eb67a36b29b0beee11a68aeb1a096d7fc15d5311081f77244220","routineCount":166,"indexCount":116,"relationCount":155});
++const model=installedCatalog.modelSha256;
++const exactCatalog=description=>Object.entries(installedCatalog).every(([key,value])=>description[key]===value);
+ const runtimeRole='erp_unified27_runtime_2393dbc6db9581c2';
+ const initializerRole='erp_unified27_initializer_2393dbc6db9581c2';
+ const importerRole='erp_unified27_importer_2393dbc6db9581c2';
+@@ -23,14 +25,15 @@
+ const ack=(result,command)=>need(result?.command===command,'CLONE_CHECK_QUERY_ACK_INVALID');
+ const safeCodes=new Set(['CLONE_CHECK_HOST_CURRENT_FAILED','CLONE_CHECK_WINDOW_EXPIRED','CLONE_CHECK_IDLE_CLIENT_REQUIRED','CLONE_CHECK_QUERY_ACK_INVALID','CLONE_CHECK_PHYSICAL_DIFFERS','CLONE_CHECK_RUNTIME_ROLE_DIFFERS','CLONE_CHECK_CATALOG_REPLY_INVALID','CLONE_CHECK_CATALOG_GUARD_ACK_INVALID','CLONE_CHECK_NATIVE_VERIFY_FAILED','CLONE_CHECK_PROJECTION_REPLY_INVALID','CLONE_CHECK_CLEANUP_UNKNOWN']);
+ 
+-/** Uses the same protected historical target and actual 161 builder. No PG. */
++/** Uses the protected historical target and the same catalog compiler as the formal writer. */
+ export async function loadPhysicalCloneReadbackCatalog(sourceRoot,referenceDirectory){
+   need(resolve(sourceRoot)===resolve(fileURLToPath(new URL('../../',import.meta.url))),'CLONE_CHECK_RUNNING_SOURCE_ROOT_REQUIRED');
+   const target=await reconstructFresh35InstalledProductionTargetV2(await loadFresh35CombinedRecordEnvelope());
+   const paths=await resolveFresh35ReferenceInputPaths(referenceDirectory);
+   const source=await loadFresh35CompactZeroSource(sourceRoot,{baselineDirectory:paths.baselineDirectory});
+   const base=await buildFresh35CompactZeroCatalog(source,target,paths);
+-  const catalog=await buildFresh35Ordinary161Catalog(source,target,base);
++  const catalog=await buildFresh35BatchedHostCatalog(source,target,base);
++  need(exactCatalog(describeFresh35CombinedCatalog(catalog)),'CLONE_CHECK_ACTUAL_CATALOG166_TARGET_REQUIRED');
+   return Object.freeze({source,target,catalog});
+ }
+ 
+@@ -41,7 +44,7 @@
+ export async function checkPhysicalCloneDatabase(input){
+   const {source,target,catalog}=input.catalogContext??{};
+   const t=describeFresh35CombinedTarget(target),description=describeFresh35CombinedCatalog(catalog);
+-  need(t.purpose==='PRODUCTION_NEW_EMPTY_EXACT35'&&description.routineCount===161&&description.modelSha256===model,'CLONE_CHECK_REAL161_TARGET_REQUIRED');
++  need(t.purpose==='PRODUCTION_NEW_EMPTY_EXACT35'&&exactCatalog(description),'CLONE_CHECK_ACTUAL_CATALOG166_TARGET_REQUIRED');
+   const clone=Object.freeze({...input.clone});
+   need(typeof clone.assertCurrent==='function'&&Number.isSafeInteger(clone.startsAt)&&Number.isSafeInteger(clone.expiresAt)&&clone.startsAt<clone.expiresAt&&
+     typeof clone.postmasterStart==='string'&&/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(?:\.\d{1,6})?\+00$/.test(clone.postmasterStart)&&clone.postmasterStart!==t.physical.postmasterStart&&
+@@ -172,7 +175,7 @@
+     return {publicResult:{format:'D1_R3_PHYSICAL_CLONE_DATABASE_READBACK_V1',requestKey:PHYSICAL_CLONE_RESTORE_KEY,
+       state:comparison.state==='FIRST_IMPORT_RECONCILED'&&scopeExplicitDigestMatched?'VERIFIED_CLONE_DATABASE_READBACK_ONLY':'CLONE_DATABASE_READBACK_DIFFERS',phase:'COMPLETE',code:null,
+       database:t.proposal.database,systemIdentifier:t.physical.systemIdentifier,databaseOid:t.physical.databaseOid,postmasterStart:clone.postmasterStart,
+-      routineCount:161,catalogModelSha256:model,physicalMatched:true,catalogMatched:true,nativePackageState:nativeResult.state,scopeExplicitDigestMatched,
++      routineCount:installedCatalog.routineCount,catalogModelSha256:model,physicalMatched:true,catalogMatched:true,nativePackageState:nativeResult.state,scopeExplicitDigestMatched,
+       warehouseMismatchCount:comparison.warehouseMismatches.length,cashMismatchCount:comparison.cashMismatches.length,currentInventory:comparison.currentExplicitInventory,
+       currentCashDirectionsDiffer:comparison.currentCashDirectionsDiffer,omittedKeyHasEffects:comparison.omittedKeyHasEffects,
+       transactionsRolledBack:true,connectionCleanup:'CLOSED',restoreClosed:false,hostClosure:'T45_OUTER_STOP_READBACK_REQUIRED'},
+@@ -182,7 +185,7 @@
+       state:cleanupUnknown?'CLONE_DATABASE_CHECK_CLEANUP_UNKNOWN':'CLONE_DATABASE_CHECK_FAILED',phase,
+       code:safeCodes.has(error?.message)?error.message:'CLONE_CHECK_DATABASE_OR_CATALOG_FAILED',
+       database:t.proposal.database,systemIdentifier:t.physical.systemIdentifier,databaseOid:t.physical.databaseOid,postmasterStart:clone.postmasterStart,
+-      routineCount:161,catalogModelSha256:model,physicalMatched:null,catalogMatched:catalogResult?true:null,nativePackageState:nativeResult?.state??null,
++      routineCount:installedCatalog.routineCount,catalogModelSha256:model,physicalMatched:null,catalogMatched:catalogResult?true:null,nativePackageState:nativeResult?.state??null,
+       scopeExplicitDigestMatched:null,warehouseMismatchCount:null,cashMismatchCount:null,currentInventory:null,currentCashDirectionsDiffer:null,omittedKeyHasEffects:null,transactionsRolledBack:null,
+       connectionCleanup:cleanupUnknown?'UNKNOWN':'CLOSED',restoreClosed:false,hostClosure:'T45_OUTER_STOP_READBACK_REQUIRED'},detail:{catalog:catalogResult??null,nativePackage:nativeResult??null}};
+   }
+--- a/tools/unified-import/physical-clone-readback.d.mts
++++ b/tools/unified-import/physical-clone-readback.d.mts
+@@ -54,7 +54,7 @@
+   readonly systemIdentifier: string;
+   readonly databaseOid: string;
+   readonly postmasterStart: string;
+-  readonly routineCount: 161;
++  readonly routineCount: 166;
+   readonly catalogModelSha256: string;
+   readonly physicalMatched: true | null;
+   readonly catalogMatched: true | null;

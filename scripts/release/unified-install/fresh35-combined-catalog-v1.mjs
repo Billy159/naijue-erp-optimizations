@@ -381,7 +381,7 @@ export function fresh35Admin154ControllerCatalogSql(catalog,source,target,postma
  return Object.freeze({guardSql:identity+'\n'+guardSql(c.model,c.lineage,target,{requireEmpty:false}),observationSql:observationSql(c.descriptor,{runtime:true})});
 }
 export function fresh35CombinedCatalogSql(catalog,source,target){describeFresh35CombinedCatalog(catalog);const c=catalogs.get(catalog);need(c.source===source&&c.target===target,'SAME_SOURCE_AND_TARGET_REQUIRED');return Object.freeze({guardSql:c.sql,observationSql:c.observation})}
-export async function assertFresh35CombinedCatalogCurrent(catalog){describeFresh35CombinedCatalog(catalog);const c=catalogs.get(catalog);await assertFresh35CombinedSourcesCurrent(c.source);if(c.descriptor.format==='FRESH35_SYNTHETIC_SQL39_CATALOG_SPEC_V1')await readSyntheticSql39(c.source);if(['FRESH35_SYNTHETIC_PREFIX155_CATALOG_SPEC_V1','FRESH35_PRODUCTION_PREFIX155_CATALOG_SPEC_V1'].includes(c.descriptor.format))await readPrefix155Inputs(c.source);if(c.descriptor.format==='FRESH35_BATCHED_CATALOG_SPEC_V1')await readBatchedInputs(c.source);if(c.descriptor.format==='FRESH35_BATCHED_COMMAND_SUCCESSOR_CATALOG_SPEC_V1')await readCommandSuccessorInputs(c.source);if(c.baseCatalog)await assertFresh35CombinedCatalogCurrent(c.baseCatalog);else await assertFresh35SyntheticBootstrapNetworkCurrent(c.target,describeFresh35CombinedSource(c.source).sourceSetSha256);await pinned(c.modelPath,MODEL_SHA);await pinned(c.functionsPath,FUNCTIONS_SHA);return true}
+export async function assertFresh35CombinedCatalogCurrent(catalog){describeFresh35CombinedCatalog(catalog);const c=catalogs.get(catalog);await assertFresh35CombinedSourcesCurrent(c.source);if(c.descriptor.format==='FRESH35_SYNTHETIC_SQL39_CATALOG_SPEC_V1')await readSyntheticSql39(c.source);if(['FRESH35_SYNTHETIC_PREFIX155_CATALOG_SPEC_V1','FRESH35_PRODUCTION_PREFIX155_CATALOG_SPEC_V1'].includes(c.descriptor.format))await readPrefix155Inputs(c.source);if(c.descriptor.format==='FRESH35_BATCHED_CATALOG_SPEC_V1')await readBatchedInputs(c.source);if(c.descriptor.format==='FRESH35_BATCHED_COMMAND_SUCCESSOR_CATALOG_SPEC_V1')await readCommandSuccessorInputs(c.source);if(c.descriptor.format===hall165.format)await readHallSuccessorInputs(c.source,hall165);if(c.descriptor.format===directHistory166.format)await readHallSuccessorInputs(c.source,directHistory166);if(c.baseCatalog)await assertFresh35CombinedCatalogCurrent(c.baseCatalog);else await assertFresh35SyntheticBootstrapNetworkCurrent(c.target,describeFresh35CombinedSource(c.source).sourceSetSha256);await pinned(c.modelPath,MODEL_SHA);await pinned(c.functionsPath,FUNCTIONS_SHA);return true}
 export function fresh35CombinedRuntimeCatalogSql(catalog,source,target){
  fresh35CombinedCatalogSql(catalog,source,target);const c=catalogs.get(catalog);
  return Object.freeze({guardSql:fresh35CombinedRuntimeTargetGuard(target)+'\n'+guardSql(c.model,c.lineage,target,{requireEmpty:false}),observationSql:observationSql(c.descriptor,{runtime:true})});
@@ -424,7 +424,7 @@ export function fresh35CombinedOrdinaryCatalogSql(catalog,source,target,physical
  need(t.purpose==='PRODUCTION_NEW_EMPTY_EXACT35'&&physical?.systemIdentifier===t.physical.systemIdentifier&&physical.databaseOid===t.physical.databaseOid,'ORDINARY_PHYSICAL_BINDING_REQUIRED');
  const role='erp_unified27_runtime_2393dbc6db9581c2';
  const identity=`DO $ordinary35_identity$ BEGIN IF (current_database()=${q(t.proposal.database)} AND session_user=${q(t.proposal.runtime)} AND current_user=${q(role)} AND current_setting('row_security')='on' AND current_setting('session_replication_role')='origin' AND NOT pg_is_in_recovery() AND current_setting('transaction_isolation')='repeatable read' AND current_setting('transaction_read_only')='on' AND host(inet_server_addr())=${q(t.ordinary.serverAddress)} AND inet_server_port()=${t.ordinary.serverPort}) IS DISTINCT FROM true THEN RAISE EXCEPTION 'FRESH35_ORDINARY_IDENTITY_DIFFERS'; END IF; END $ordinary35_identity$;`;
- return Object.freeze({guardSql:identity+'\n'+guardSql(c.model,c.lineage,target,{requireEmpty:false}),observationSql:observationSql((c.descriptor.format==='FRESH35_BATCHED_COMMAND_SUCCESSOR_CATALOG_SPEC_V1'||c.descriptor.format==='FRESH35_SETTLEMENT24_CURRENT_WIRE_CATALOG_SPEC_V1')?c.descriptor:describeFresh35CombinedSource(source),{runtime:true,systemIdentifierExpression:q(physical.systemIdentifier)})});
+ return Object.freeze({guardSql:identity+'\n'+guardSql(c.model,c.lineage,target,{requireEmpty:false}),observationSql:observationSql((c.descriptor.format==='FRESH35_BATCHED_COMMAND_SUCCESSOR_CATALOG_SPEC_V1'||c.descriptor.format==='FRESH35_SETTLEMENT24_CURRENT_WIRE_CATALOG_SPEC_V1'||c.descriptor.format===hall165.format||c.descriptor.format===directHistory166.format)?c.descriptor:describeFresh35CombinedSource(source),{runtime:true,systemIdentifierExpression:q(physical.systemIdentifier)})});
 }
 export function validateFresh35CombinedOrdinaryCatalogObservation(raw,catalog,source,target){return validateCatalogObservation(raw,catalog,source,target,true,true)}
 
@@ -607,4 +607,108 @@ export async function buildFresh35Settlement24CurrentWireCatalogV1(source,target
  // All five new assets are in the original source-pin mechanism. The recursive
  // check preserves the old one-routine command-catalog assertions unchanged.
  await assertFresh35CombinedCatalogCurrent(token);return token;
+}
+
+// The closed successor is read against the same installed SQL42 model.
+const hallSuccessorBase='scripts/release/unified-install/batched-import-v1';
+const hall165=freeze({"format":"FRESH35_HALL_FINALIZE_165_CATALOG_SPEC_V1","assetPrefix":"HALL-FINALIZE-165","sqlStem":"hall-finalize-165","errorPrefix":"HALL165","routineCount":165,"pinsFormat":"FRESH35_HALL_FINALIZE_165_SUCCESSOR_PINS_V1","pinsSha256":"e763c1db8a056aa617924fa40c10bb7a243569f6ced4754a4eefe40631626d1a","changes":["naijue_erp.assert_document_migration(uuid)","naijue_erp.standard_import_record_proof(uuid)","naijue_erp.standard_whole_package_command_v2(jsonb,text,text,uuid,int4,jsonb)"],"helpers":["naijue_erp.standard_history_hall_projection_relation_v1()","naijue_erp.standard_history_hall_projection_store_v1(jsonb,jsonb,jsonb,jsonb)","naijue_erp.assert_final_history_origin_v1(uuid,uuid,uuid,jsonb)","naijue_erp.assert_document_migration_checked_v1(uuid,uuid)"]});
+const directHistory166=freeze({"format":"FRESH35_DIRECT_HISTORY_166_CATALOG_SPEC_V1","assetPrefix":"DIRECT-HISTORY-166","sqlStem":"direct-history-166","errorPrefix":"DIRECT_HISTORY_166","routineCount":166,"beforeRoutineCount":165,"pinsFormat":"FRESH35_DIRECT_HISTORY_166_SUCCESSOR_PINS_V1","pinsSha256":"f387568c43a35d64ca083cbc6f9b8afb1ac299cd734b60c8862ea99b2a1769b2","changes":["naijue_erp.validate_transfer_commit()","naijue_erp.validate_transfer_header_commit()","naijue_erp.validate_transfer_line_commit()","naijue_erp.validate_unified_ordinary_operation()","naijue_erp.standard_whole_package_command_v2(jsonb,text,text,uuid,int4,jsonb)","naijue_erp.standard_batched_import_assert_group_v1(uuid,jsonb)","naijue_erp.standard_batched_import_complete_v1(jsonb,jsonb)","naijue_erp.assert_standard_import_operation(uuid)","naijue_erp.validate_import_operation()"],"helpers":["naijue_erp.standard_transfer_migration_reuse_v1(uuid,jsonb)"],"beforeFormat":"FRESH35_HALL_FINALIZE_165_CATALOG_SPEC_V1","indexNames":["sales_line_sales_id_idx","inventory_balance_last_operation_id_idx"]});
+async function readHallSuccessorInputs(source,spec){
+ const {root}=fresh35CombinedSourceData(source);
+ const pins=await pinned(resolve(root,hallSuccessorBase,spec.assetPrefix+'-PINS.json'),spec.pinsSha256);
+ need(pins.format===spec.pinsFormat&&pins.beforeRoutineCount===(spec.beforeRoutineCount??161)
+   &&pins.afterRoutineCount===spec.routineCount&&isDeepStrictEqual(pins.changes.map(row=>row.signature),spec.changes)
+   &&isDeepStrictEqual(pins.newHelpers.map(row=>row.signature),spec.helpers),
+  spec.errorPrefix+'_EXACT_COHORT_REQUIRED');
+ for(const kind of ['forward','rollback']){
+  const declared=pins.sql[kind], stem='adapters/postgres/patches/'+spec.sqlStem+'-'+kind;
+  need(declared.path===stem+'.sql'&&declared.innerPath===stem+'-inner.sql'&&declared.innerStatementCount===1,
+   spec.errorPrefix+'_SQL_PATH_DIFFERS');
+  const wrappedPath=resolve(root,declared.path), innerPath=resolve(root,declared.innerPath);
+  need(await realpath(wrappedPath)===wrappedPath&&await realpath(innerPath)===innerPath,spec.errorPrefix+'_CANONICAL_SQL_REQUIRED');
+  const [wrapped,inner]=await Promise.all([readFile(wrappedPath),readFile(innerPath)]);
+  need(hash(wrapped)===declared.sha256&&hash(inner)===declared.innerSha256
+   &&wrapped.equals(Buffer.concat([Buffer.from('BEGIN ISOLATION LEVEL READ COMMITTED;\n'),inner,Buffer.from('COMMIT;\n')])),
+   spec.errorPrefix+'_SQL_BYTES_DIFFERS');
+ }
+ const values=await Promise.all(['MODEL','BODIES','DEFINITIONS'].map(kind=>{
+  const asset=pins.catalogInputs[kind];
+  need(asset.path===hallSuccessorBase+'/'+spec.assetPrefix+'-'+kind+'.json',spec.errorPrefix+'_CATALOG_PATH_DIFFERS');
+  return pinned(resolve(root,asset.path),asset.sha256);
+ }));
+ return {pins,values};
+}
+
+async function buildHallSuccessorCatalog(source,target,predecessorCatalog,spec){
+ describeFresh35CombinedCatalog(predecessorCatalog);
+ const prior=catalogs.get(predecessorCatalog), t=describeFresh35CombinedTarget(target);
+ need(prior.source===source&&prior.target===target&&prior.descriptor.format===(spec.beforeFormat??'FRESH35_SETTLEMENT24_CURRENT_WIRE_CATALOG_SPEC_V1'),
+  spec.errorPrefix+'_SQL42_PREDECESSOR_REQUIRED');
+ const {pins,values:[raw,bodies,definitions]}=await readHallSuccessorInputs(source,spec);
+ const roles={fresh35_owner_20261105_r1:t.proposal.owner,fresh35_controller_20261105_r1:t.proposal.controller};
+ need(isDeepStrictEqual(roles,pins.roleMap)&&prior.descriptor.modelSha256===pins.predecessorInstalledCatalog.modelSha256,
+  spec.errorPrefix+'_EXACT_SQL42_ROLE_AND_MODEL_REQUIRED');
+ const model=remap(raw,roles), expected=structuredClone(prior.model);
+ need(expected.routines.length===(spec.beforeRoutineCount??161)&&Object.keys(bodies).length===spec.routineCount&&Object.keys(definitions).length===spec.routineCount,
+  spec.errorPrefix+'_EXACT_CATALOG_SIZE_REQUIRED');
+ const changed=new Map(pins.changes.map(row=>[row.signature,row]));
+ for(const item of expected.routines){
+  const signature=normal(item.signature), change=changed.get(signature);
+  if(change){
+   need(item.bodySha256===change.beforeBodySha256&&item.definitionSha256===change.beforeDefinitionSha256
+    &&hash(prior.bodies.get(signature))===change.beforeBodySha256
+    &&hash(prior.definitions.get(signature))===change.beforeDefinitionSha256,
+    spec.errorPrefix+'_EXACT_OLD_ROUTINE_REQUIRED');
+   item.bodySha256=change.afterBodySha256;item.definitionSha256=change.afterDefinitionSha256;
+  }else{
+   need(bodies[signature]===prior.bodies.get(signature)&&definitions[signature]===prior.definitions.get(signature),
+    spec.errorPrefix+'_UNRELATED_ROUTINE_DIFFERS');
+  }
+ }
+ for(const helper of pins.newHelpers){
+  need(!prior.bodies.has(helper.signature)&&helper.owner===t.proposal.owner
+   &&isDeepStrictEqual(helper.acl,spec===directHistory166
+    ? [t.proposal.owner+'=X/'+t.proposal.owner,'erp_unified27_importer_2393dbc6db9581c2=X/'+t.proposal.owner].sort()
+    : [t.proposal.owner+'=X/'+t.proposal.owner]),spec.errorPrefix+'_PRIVATE_HELPER_REQUIRED');
+  expected.routines.push(helper);
+ }
+ if(spec===directHistory166){
+  need(expected.indexes.length===114&&expected.relations.length===153
+   &&isDeepStrictEqual(pins.catalogAdditions.indexes.map(r=>r.index),spec.indexNames)
+   &&isDeepStrictEqual(pins.catalogAdditions.relations.map(r=>r.relation),spec.indexNames),
+   spec.errorPrefix+'_INDEX_DELTA_DIFFERS');
+  expected.indexes.push(...pins.catalogAdditions.indexes);
+  expected.relations.push(...pins.catalogAdditions.relations);
+ }
+ need(isDeepStrictEqual(model,expected)&&hash(JSON.stringify(model))===pins.afterMappedModelSha256,
+  spec.errorPrefix+'_UNRELATED_MODEL_CHANGED');
+ for(const item of model.routines){
+  const signature=normal(item.signature);
+  need(hash(bodies[signature])===item.bodySha256&&hash(definitions[signature])===item.definitionSha256,
+   spec.errorPrefix+'_EXACT_ROUTINE_BYTES_REQUIRED');
+ }
+ const sourceSetSha256=hash(JSON.stringify({parent:prior.descriptor.sourceSetSha256,
+  installedPredecessor:pins.predecessorInstalledCatalog,successorPinsSha256:spec.pinsSha256}));
+ const sql=guardSql(model,prior.lineage,target,{requireEmpty:false}),observation=observationSql({sourceSetSha256});
+ const descriptor={...prior.descriptor,format:spec.format,sourceSetSha256,
+  installedPredecessor:pins.predecessorInstalledCatalog,predecessorModelSha256:prior.descriptor.modelSha256,
+  modelSha256:pins.afterMappedModelSha256,routineCount:spec.routineCount,
+  ...(spec===directHistory166?{indexCount:model.indexes.length,relationCount:model.relations.length}:{}),changedRoutineCount:spec.changes.length,addedRoutineCount:spec.helpers.length,
+  changes:pins.changes,newHelpers:pins.newHelpers,successorPinsSha256:spec.pinsSha256,
+  patchSqlSha256:pins.sql.forward.sha256,patchSqlInnerSha256:pins.sql.forward.innerSha256,
+  rollbackSqlSha256:pins.sql.rollback.sha256,rollbackSqlInnerSha256:pins.sql.rollback.innerSha256,
+  guardSqlSha256:hash(sql),observationSqlSha256:hash(observation)};
+ delete descriptor.catalogSpecSha256;
+ const token=Object.freeze({profile:descriptor.format});
+ catalogs.set(token,{...prior,model,bodies:new Map(Object.entries(bodies)),definitions:new Map(Object.entries(definitions)),
+  sql,observation,baseCatalog:predecessorCatalog,descriptor:freeze({...descriptor,catalogSpecSha256:hash(JSON.stringify(descriptor))})});
+ await assertFresh35CombinedCatalogCurrent(token);
+ return token;
+}
+
+export function buildFresh35HallFinalize165CatalogV1(source,target,predecessorCatalog){
+ return buildHallSuccessorCatalog(source,target,predecessorCatalog,hall165);
+}
+export function buildFresh35DirectHistory166CatalogV1(source,target,hall165Catalog){
+ return buildHallSuccessorCatalog(source,target,hall165Catalog,directHistory166);
 }

@@ -1,0 +1,84 @@
+--- a/bundle/final33_receipts.py
++++ b/bundle/final33_receipts.py
+@@ -266,8 +266,81 @@
+     return update
+ 
+ 
++CATALOG166 = {'catalogSpecSha256': '97853a42224bcab2518965c8b47f785b23dc96d3cbc817c1bed0d901723f582a',
++ 'modelSha256': '096a084e9d6fddd98277c56adc5688fa9a7fb179286e5e03fc7f6b54cbcedad8',
++ 'sourceSetSha256': '4785eed1ad97eb67a36b29b0beee11a68aeb1a096d7fc15d5311081f77244220'}
++CATALOG166_PHASES = {'restore': ('t45-r3-catalog166-auth-restore-20261119-02',
++             '0720caf28f93f275115990cf47054b523b0e223c600ce26868f0f98b65eebc79',
++             'd441bdec840dcde2f17f21ec4c5adb62f2658ea886beb966606c5e3a0b62156a',
++             'ad23a11648c6c39e66287cbcbcce199a7e9b6d90b8f8adbca3c2e697ebf9a770'),
++ 'stop': ('t45-r3-catalog166-preserve-stop-20261119-02',
++          'fc9dd7650202befec17816e4024a907c957489aafb092977bce576b9ab1f2cfe',
++          '08a43c7a4d0a761c4287f273d2513ca5d57d9faad0478bf8ffd6f0ae87d688eb',
++          'f56e1063f8b3068d5a36cb6e26182b6a95c1ec92a32bfc88fec03cae60078461'),
++ 'upgrade': ('t45-r3-catalog166-upgrade-20261119-02',
++             'bee9f25cd17248f0dd0caaa8ff95ea24d13486d6d75c3c2a25498f8f3855be35',
++             '01f8f48e67a8a590cc824f1e92c24b3ee79f7fad594320ce6f7e673069b07664',
++             'effd79ed058f549c6b2bdcc05611118c3faa3a754143e5e63b490004ac1def0d')}
++CATALOG166_WORKER_SOURCE = '9467a363a60a908d120e088f471901248f7060f5e6c2d7e9a1d2ece7208fadef'
++CATALOG166_COMPLETION = '89815614f00e9a8a48a2c0ea1edd4022c93aae2df9031355021caa522cd9a057'
++CATALOG166_STOP_CLEANUP = 'b811616fc92fe1819f4e172d5e1f94390eeba6c3315536f1ea47aacad8fc56f0'
++CATALOG166_RESTORE_CLEANUP = ('54cf7c87c3fa0c19d11b2aac80889b786b2c1b31f049abe2421668e96498dcf2',
++ 'ce952f12423c53d9f0f3fcad30ae72fd9c298ab41ee95096d6a89b6d6a348504')
++CATALOG166_SAFE_RESTORE = '2bde9b90f8b674945c846219be1ab7bd10870356ebd25404b1b19e457af8bd65'
++
++
++def catalog166_predecessor():
++    def phase_result(which, leaf):
++        key, done, root, public = CATALOG166_PHASES[which]
++        terminal(key, done)
++        return public_result(key, leaf, root, public_pin=public)
++
++    update = phase_result('upgrade', 'batched161-command-update-result.json')
++    need(update.get('state') == 'CATALOG166_APPLIED_AND_READ_BACK'
++         and update.get('batchedCatalog') == CATALOG166
++         and update.get('sourceSetSha256') == CATALOG166_WORKER_SOURCE
++         and update.get('completionSha256') == CATALOG166_COMPLETION
++         and update.get('connectionCleanup') == 'CLOSED'
++         and update.get('commitOutcomeUnknown') is update.get('businessImported') is False
++         and all(update.get(k) is True for k in ('commitAcknowledged', 'postCommitReadback', 'independentPhysicalReadback',
++             'originalDurablePrefixVerifiedBeforeAfterAndReadback', 'roleRestoreAcknowledged',
++             'innerAuthorityRemoved', 'childReaped', 'descendantsReaped')),
++         'FINAL33_ACTUAL_CATALOG166_UPDATE_REQUIRED')
++
++    stop = phase_result('stop', 'normal05-preserve-stop-result.json')
++    service = update['service']
++    cleanup = json.loads(read(STATE / 'native-services' / service['serviceKey'] / 'cleanup.json', CATALOG166_STOP_CLEANUP))
++    upgrade_key, upgrade_terminal = CATALOG166_PHASES['upgrade'][:2]
++    need(stop.get('service') == service and stop.get('pgStopped') is stop.get('holdRetained') is True
++         and stop.get('status') == 'NORMAL05_PRESERVATION_ONLY_CLEAN_STOP_CONFIRMED'
++         and stop.get('cleanupSha256') == CATALOG166_STOP_CLEANUP
++         and stop['currentBatchTerminals'].get(upgrade_key) == dict(state='COMPLETED', terminalSha256=upgrade_terminal)
++         and cleanup.get('requestKey') == service['serviceKey']
++         and cleanup.get('retained') is cleanup.get('runtimeMaterialPreserved') is True
++         and all(cleanup['cleanup'].get(k) is True for k in
++             ('cleanupComplete', 'cleanShutdown', 'dataPreserved', 'ownedPidAbsent', 'portAbsent')),
++         'FINAL33_ACTUAL_CATALOG166_MAINTENANCE_STOP_REQUIRED')
++
++    restore = phase_result('restore', 'maintenance-auth-result.json')
++    closed = public_result(CATALOG166_PHASES['restore'][0], 'maintenance-auth-cleanup.json',
++                           CATALOG166_RESTORE_CLEANUP[0], public_pin=CATALOG166_RESTORE_CLEANUP[1])
++    safe = json.loads(read(STATE / 'native-services/catalog166-auth-20261119-02/restored.json', CATALOG166_SAFE_RESTORE))
++    need(restore.get('phase') == 'restore'
++         and restore.get('status') == 'FINITE_MAINTENANCE_AUTH_STEP_AND_OWN_CONTAINER_EXIT_CONFIRMED'
++         and restore.get('cleanup') == closed and restore.get('result') == safe
++         and safe.get('status') == 'EXACT_ORIGINAL_TWO_ROLE_AUTH_AND_BOUNDARIES_RESTORED_BY_OFFLINE_READBACK'
++         and safe.get('naturalExpiryCountedAsRestoration') is False
++         and safe.get('exactOriginalVerifierAndExpiryVerifiedPrivately') is safe.get('databaseStillStopped') is True
++         and all(closed.get(k) is True for k in ('confirmed', 'ownContainerStopped', 'ownedPidAbsent', 'sourceDataPreserved')),
++         'FINAL33_ACTUAL_CATALOG166_MAINTENANCE_RESTORE_REQUIRED')
++    return update
++
++
+ def recovery_catalog_identity(facts):
+     update = facts['catalog']
++    if update.get('requestKey') == CATALOG166_PHASES['upgrade'][0]:
++        need(update == catalog166_predecessor(), 'FINAL33_ACTUAL_CATALOG166_LINEAGE_DIFFERS')
++        return 166, CATALOG166['modelSha256']
+     if update.get('requestKey') == HALL165_UPDATE[0]:
+         need(update == hall165_catalog_predecessor(), 'FINAL33_ACTUAL_HALL165_CATALOG_LINEAGE_DIFFERS')
+         return 165, HALL165_CATALOG['modelSha256']

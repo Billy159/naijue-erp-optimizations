@@ -553,9 +553,9 @@ export async function openReviewedFresh35ProductionHost(config,sourceRoot,target
 }
 
 const ordinaryAdmissions=new WeakMap(),ordinaryPendingPools=new WeakSet(),ordinaryUsedPools=new WeakSet();
-const ordinaryInstalledSourceRoot='/opt/naijue-erp/fresh35-combined-v1';
-const currentProductionServicePath='/run/naijue-rewrite/current-production-service.json';
-const firstR3Workspace='/var/lib/naijue-erp/fresh35-production/fresh35-first-production-20261110-r3';
+const ordinaryInstalledSourceRoot='/release-review/location-e24b037445';
+const currentProductionServicePath='/release-review/location-55b5a943b4';
+const firstR3Workspace='/release-review/location-befd60915f';
 const ordinaryRole='erp_unified27_runtime_2393dbc6db9581c2';
 
 async function loadOrdinaryInstalledHistory(snapshot,referenceDirectory,currentCatalog){
@@ -979,7 +979,7 @@ async function admitOrdinaryPool(pool,connection,synthetic,currentServiceInput,a
   for(const [path,digest]of [['tools/unified-import/fresh35-host-session.mjs',loadedHostSha256],['scripts/release/unified-install/fresh35-combined-record-v1.mjs',FRESH35_COMBINED_RECORD_MODULE_SHA256]])need(pins.some(p=>p.path===path&&p.sha256===digest),'LOADED_IMPLEMENTATION_SOURCE_DIFFERS');
   const baseCatalog=await (compactZeroInput?buildFresh35CompactZeroCatalog:admin154?buildFresh35Admin154Catalog:buildFresh35CombinedCatalog)(source,target,paths);
   const catalog=compactZeroInput?.generation
-   ?await buildFresh35Ordinary161Catalog(source,target,baseCatalog):baseCatalog;
+   ?await buildFresh35OrdinaryDirectHistory166Catalog(source,target,baseCatalog):baseCatalog;
   const history=currentService&&await loadOrdinaryInstalledHistory(snapshot,t.ordinary.referenceDirectory,compactZeroInput?fresh35CompactZeroParentCatalog(baseCatalog):baseCatalog);
   const record=history?.record??validateFresh35CombinedRecord(envelope,await compileFresh35CombinedProgram({source,target,catalog}));
   const compact=compactZeroInput?await compactZeroLineage(snapshot,record,t,baseCatalog,currentService,compactZeroInput.parentPins,compactZeroInput.successorSha256):undefined;
@@ -1356,4 +1356,19 @@ export async function describeFresh35Ordinary161Source(sourceRoot,referenceDirec
  const base=await buildFresh35CompactZeroCatalog(source,target,paths);
  const catalog=await buildFresh35Ordinary161Catalog(source,target,base);
  return Object.freeze({source:describeFresh35CombinedSource(source),catalog:describeFresh35CombinedCatalog(catalog)});
+}
+
+/** Exact installed Hall165 ordinary admission; the historical lineage uses its own original catalogue. */
+export async function buildFresh35OrdinaryHall165Catalog(source,target,compactCatalog){
+ const prior=await buildFresh35Ordinary161Catalog(source,target,compactCatalog);
+ const {buildFresh35HallFinalize165CatalogV1}=await import('../../scripts/release/unified-install/fresh35-combined-catalog-v1.mjs');
+ const catalog=await buildFresh35HallFinalize165CatalogV1(source,target,prior);
+ const descriptor=describeFresh35CombinedCatalog(catalog);
+ need(descriptor.routineCount===165&&descriptor.modelSha256==='b9b67be2a68dcd35d445b7fe45838fdaade66cf877d3fdc5940eee880508c3d8','ORDINARY_HALL165_MODEL_REQUIRED');
+ return catalog;
+}
+export async function buildFresh35OrdinaryDirectHistory166Catalog(source,target,compactCatalog){
+ const hall165=await buildFresh35OrdinaryHall165Catalog(source,target,compactCatalog);
+ const {buildFresh35DirectHistory166CatalogV1}=await import('../../scripts/release/unified-install/fresh35-combined-catalog-v1.mjs');
+ return buildFresh35DirectHistory166CatalogV1(source,target,hall165);
 }
